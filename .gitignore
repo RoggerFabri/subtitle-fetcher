@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Subtitles downloaded by this tool (don't commit media sidecars)
+*.srt
+*.ass
+*.ssa
+*.sub
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
