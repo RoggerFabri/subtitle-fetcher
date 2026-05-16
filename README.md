@@ -36,23 +36,15 @@ Starts an HTTP server at `http://localhost:8080`. The UI lets you:
 - Delete subtitle sidecars
 - Export/import all settings and IMDB IDs as JSON
 
-State is persisted in `data/subtitles.db` (SQLite) next to the binary. The path can be overridden with the `DB_PATH` environment variable.
+State is persisted in `data/subtitles.db` (SQLite) relative to the binary. Override the directory with the `DB_PATH` environment variable.
 
-### CLI batch fetch (legacy)
+### Scan only
 
 ```
-./subtitle-fetcher -u <username> -p <password> -k <api-key> -d <directory> [-w <workers>]
+./subtitle-fetcher --scan <root>
 ```
 
-Walks `<directory>` recursively, skips files that already have a subtitle sidecar, and downloads missing subtitles via OpenSubtitles only.
-
-| Flag | Description |
-| --- | --- |
-| `-u` | OpenSubtitles username |
-| `-p` | OpenSubtitles password |
-| `-k` | OpenSubtitles API key |
-| `-d` | Directory to scan |
-| `-w` | Parallel downloads, default `5` |
+Walks `<root>` recursively, records every video file and its subtitle status in the database, then exits. Useful for updating the database without starting the web server.
 
 ## Docker
 
@@ -60,9 +52,16 @@ Walks `<directory>` recursively, skips files that already have a subtitle sideca
 docker-compose up --build
 ```
 
-The `docker-compose.yaml` mounts your media directory (set the volume path) and persists the database in `./data`. On Windows, use a WSL path for network shares (e.g. `/mnt/z/Shared/Downloads`).
+The compose file mounts your media directory at `/media` inside the container (edit the volume path in `docker-compose.yaml`) and persists the database in `./data` on the host. The container runs `--serve /media` by default.
 
-The `DB_PATH` environment variable is set to `/app/data` inside the container so the database lands in the mounted volume.
+Environment variables set in the container:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `8080` | HTTP listen port |
+| `DB_PATH` | `/app/data` | Directory where `subtitles.db` is stored |
+
+On Windows, use a WSL path for network shares (e.g. `/mnt/z/Shared/Downloads`).
 
 ## Subtitle providers
 
@@ -72,7 +71,7 @@ Providers are tried in configured priority order; the first to return a result w
 | --- | --- | --- |
 | [OpenSubtitles](https://www.opensubtitles.com) | Username + password + API key | Largest index; VIP account removes download limits |
 | [SubDL](https://subdl.com) | API key | No download quota |
-| [Wyzie](https://sub.wyzie.io) | None | IMDB ID required |
+| [Wyzie](https://sub.wyzie.io) | API key | IMDB ID required |
 
 Provider credentials, order, and enable/disable toggles are configured from the Settings tab in the web UI and stored in the database.
 
