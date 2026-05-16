@@ -160,6 +160,11 @@ func (p *podnapisiProvider) search(show string, season, episode int, hasSE bool)
 	}
 	defer resp.Body.Close()
 
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(contentType, "application/json") {
+		return nil, fmt.Errorf("podnapisi: expected JSON response, got %s", contentType)
+	}
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		data, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("search failed %d: %s", resp.StatusCode, data)
