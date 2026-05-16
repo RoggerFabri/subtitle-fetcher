@@ -387,7 +387,36 @@ function renderSettings() {
 
   container.innerHTML = window.providerOrder.map((name, index) => {
     const isEnabled = window.providerEnabled[name];
-    const fields = window.providerFields[name] || {};
+    if (!window.providerFields[name]) window.providerFields[name] = {};
+    const fields = window.providerFields[name];
+
+    let fieldsHtml = '';
+    if (name === 'opensubtitles') {
+      fieldsHtml = `
+        <div class="provider-field-row">
+          <label>Username</label>
+          <input type="text" value="${fields.username || ''}" oninput="window.providerFields['${name}'].username = this.value">
+        </div>
+        <div class="provider-field-row">
+          <label>Password</label>
+          <input type="password" placeholder="••••••••" oninput="window.providerFields['${name}'].password = this.value">
+        </div>
+        <div class="provider-field-row">
+          <label>API Key</label>
+          <input type="text" value="${fields.api_key || fields.openSubtitles_api_key || ''}" oninput="window.providerFields['${name}'].openSubtitles_api_key = this.value">
+        </div>
+      `;
+    } else if (name === 'subdl') {
+      fieldsHtml = `
+        <div class="provider-field-row">
+          <label>API Key</label>
+          <input type="text" value="${fields.api_key || ''}" oninput="window.providerFields['${name}'].api_key = this.value">
+        </div>
+      `;
+    } else if (name === 'podnapisi') {
+      fieldsHtml = `<p class="no-cred">No credentials required for Podnapisi.</p>`;
+    }
+
     return `
       <div class="provider-card">
         <div class="provider-header">
@@ -401,14 +430,7 @@ function renderSettings() {
           </div>
         </div>
         <div class="provider-body">
-          <div class="provider-field-row">
-            <label>Username</label>
-            <input type="text" value="${fields.username || ''}" oninput="window.providerFields['${name}'].username = this.value">
-          </div>
-          <div class="provider-field-row">
-            <label>Password</label>
-            <input type="password" placeholder="••••••••" oninput="window.providerFields['${name}'].password = this.value">
-          </div>
+          ${fieldsHtml}
         </div>
       </div>
     `;
