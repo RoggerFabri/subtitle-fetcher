@@ -103,11 +103,34 @@ export async function triggerScan() {
   }
 }
 
+function lockMediaChildren(mediaId) {
+  const card = document.getElementById(`fetch-media-${mediaId}`)?.closest('.media-card');
+  if (!card) return;
+  card.querySelectorAll('[id^="fetch-season-"], .episode-row .fetch-btn').forEach(b => { b.disabled = true; });
+}
+
+function unlockMediaChildren(mediaId) {
+  const card = document.getElementById(`fetch-media-${mediaId}`)?.closest('.media-card');
+  if (!card) return;
+  card.querySelectorAll('[id^="fetch-season-"], .episode-row .fetch-btn').forEach(b => { b.disabled = false; });
+}
+
+function lockSeasonChildren(mediaId, season) {
+  const row = document.getElementById(`fetch-season-${mediaId}-${season}`)?.closest('.season-row');
+  row?.nextElementSibling?.querySelectorAll('.fetch-btn').forEach(b => { b.disabled = true; });
+}
+
+function unlockSeasonChildren(mediaId, season) {
+  const row = document.getElementById(`fetch-season-${mediaId}-${season}`)?.closest('.season-row');
+  row?.nextElementSibling?.querySelectorAll('.fetch-btn').forEach(b => { b.disabled = false; });
+}
+
 export async function fetchMedia(id, event) {
   if (event) event.stopPropagation();
   const btn = document.getElementById(`fetch-media-${id}`);
   const name = mediaNameById(id);
   setFetching(btn, true);
+  lockMediaChildren(id);
   try {
     const data = await api.apiFetchMedia(id);
     const prefix = name ? `"${name}" — ` : '';
@@ -118,6 +141,7 @@ export async function fetchMedia(id, event) {
     showToast(`${name ? `"${name}" — ` : ''}fetch failed`, "error");
   } finally {
     setFetching(btn, false);
+    unlockMediaChildren(id);
   }
 }
 
@@ -126,6 +150,7 @@ export async function fetchSeason(id, season, event) {
   const btn = document.getElementById(`fetch-season-${id}-${season}`);
   const name = mediaNameById(id);
   setFetching(btn, true);
+  lockSeasonChildren(id, season);
   try {
     const data = await api.apiFetchSeason(id, season);
     const prefix = name ? `"${name}" S${String(season).padStart(2,'0')} — ` : `Season ${season} — `;
@@ -136,6 +161,7 @@ export async function fetchSeason(id, season, event) {
     showToast(`${name ? `"${name}" S${season}` : `Season ${season}`} — fetch failed`, "error");
   } finally {
     setFetching(btn, false);
+    unlockSeasonChildren(id, season);
   }
 }
 
