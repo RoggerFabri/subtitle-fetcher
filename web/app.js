@@ -70,43 +70,12 @@ function loadSettings(s) {
 
 async function refreshData() {
   try {
-    const [mediaRes, settingsRes] = await Promise.all([
-      fetch('/api/report'),
-      fetch('/api/settings')
-    ]);
-    
-    // Only fetch settings here, media data is handled by refreshMediaAndStats
-    if (mediaRes.ok) {
-      const data = await mediaRes.json();
-      // The server returns a top-level array, not {media: []}
-      window.mediaData = Array.isArray(data) ? data : (data.media || []);
-      
-      // Enrich data with computed counts and status for the UI
-      window.mediaData.forEach(m => {
-        const files = m.files || m.Files || [];
-        m.subtitles_count = files.filter(f => f.has_subtitle || f.HasSubtitle).length;
-        m.total_count = files.length;
-        
-        if (m.total_count === 0) m.status = 'missing';
-        else if (m.subtitles_count === m.total_count) m.status = 'complete';
-        else if (m.subtitles_count > 0) m.status = 'partial';
-        else m.status = 'missing';
-      });
-
-      const total = window.mediaData.reduce((acc, m) => acc + m.total_count, 0); // This block is now part of refreshMediaAndStats
-      const subbed = window.mediaData.reduce((acc, m) => acc + m.subtitles_count, 0);
-      const stats = {
-        total_files: total,
-        missing: total - subbed,
-        coverage: total > 0 ? Math.round((subbed / total) * 100) : 0
-      };
-      updateStats(stats);
-    }
+    const settingsRes = await fetch('/api/settings');
     if (settingsRes.ok) {
       const settings = await settingsRes.json();
       loadSettings(settings);
     }
-    await refreshMediaAndStats(); // Call the new helper
+    await refreshMediaAndStats();
   } catch (err) {
     console.error(err);
     showToast("Failed to load initial data from server", "error");
