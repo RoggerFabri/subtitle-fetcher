@@ -178,17 +178,22 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("[scan] started  root=%s\n", s.root)
 		start := time.Now()
 		s.setScanStatus("running")
-		if err := runScanWithProgress(s.root, func(status string, done, total int) { // Modified signature
+		var lastLog time.Time
+		if err := runScanWithProgress(s.root, func(status string, done, total int) {
 			s.setScanStatus(status)
-			s.scanCurrent.Store(int64(done)) // Update current
-			s.scanTotal.Store(int64(total))  // Update total
-			fmt.Printf("\r[scan] %s", status)
+			s.scanCurrent.Store(int64(done))
+			s.scanTotal.Store(int64(total))
+			now := time.Now()
+			if done == total || now.Sub(lastLog) >= time.Second {
+				lastLog = now
+				fmt.Printf("[scan] %s\n", status)
+			}
 		}); err != nil {
-			fmt.Printf("\n[scan] error: %v\n", err)
+			fmt.Printf("[scan] error: %v\n", err)
 			s.setScanStatus("error: " + err.Error())
 			return
 		}
-		fmt.Printf("\n[scan] done  elapsed=%s\n", time.Since(start).Round(time.Millisecond))
+		fmt.Printf("[scan] done  elapsed=%s\n", time.Since(start).Round(time.Millisecond))
 		s.setScanStatus("done")
 	}()
 	jsonOK(w, map[string]string{"status": "started"})
