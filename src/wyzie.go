@@ -214,6 +214,12 @@ func (p *wyzieProvider) search(imdbID string, season, episode int, hasSE bool) (
 	}
 	u.RawQuery = q.Encode()
 
+	maskURL := u.String()
+	if strings.Contains(maskURL, "key=") {
+		maskURL = strings.Replace(maskURL, p.apiKey, "***", 1)
+	}
+	fmt.Printf("[wyzie] api call: GET %s\n", maskURL)
+
 	req, _ := http.NewRequest("GET", u.String(), nil)
 	req.Header.Set("Accept", "application/json")
 	resp, err := p.hc.Do(req)

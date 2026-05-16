@@ -3,7 +3,9 @@ package main
 import (
 	"errors"
 	"flag"
+	"os"
 	"path/filepath"
+	"strconv"
 )
 
 type Config struct {
@@ -29,7 +31,14 @@ func parseConfig() (Config, error) {
 	var cfg Config
 	flag.StringVar(&cfg.ScanRoot, "scan", "", "Root folder to scan for subtitle coverage (e.g. Z:\\Shared\\Downloads)")
 	flag.StringVar(&cfg.ServeRoot, "serve", "", "Root folder to serve the web UI for (e.g. Z:\\Shared\\Downloads)")
-	flag.IntVar(&cfg.Port, "port", 8080, "Port for the web server (used with --serve)")
+	
+	defaultPort := 8080
+	if envPort := os.Getenv("PORT"); envPort != "" {
+		if p, err := strconv.Atoi(envPort); err == nil {
+			defaultPort = p
+		}
+	}
+	flag.IntVar(&cfg.Port, "port", defaultPort, "Port for the web server (used with --serve)")
 	flag.StringVar(&cfg.Username, "u", "", "OpenSubtitles username")
 	flag.StringVar(&cfg.Password, "p", "", "OpenSubtitles password")
 	flag.StringVar(&cfg.APIKey, "k", "", "OpenSubtitles API key")

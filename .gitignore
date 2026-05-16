@@ -1,31 +1,21 @@
-# Go
+# Binaries
 subtitle-fetcher
 subtitle-fetcher.exe
+*.exe
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-.venv/
-venv/
-env/
-
-# Subtitles downloaded by this tool (don't commit media sidecars)
-*.srt
-*.ass
-*.ssa
-*.sub
+# Database
+*.db
+*.db-shm
+*.db-wal
+/data/
 
 # IDE / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-/subtitles.db
 
-# Binary
-.exe
-/.playwright-mcp
-/subtitles.db-shm
-/subtitles.db-wal
+# Claude Code
+.claude/
+.playwright-mcp/
 /nul

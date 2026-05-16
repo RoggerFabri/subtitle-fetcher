@@ -25,7 +25,7 @@ LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
 ## build   Compile the binary for the current platform
 build:
-	go build $(LDFLAGS) -o $(OUT) .
+	go build $(LDFLAGS) -o $(OUT) ./src
 
 ## run     Build and run  (pass flags via ARGS=, e.g. make run ARGS="--scan Z:\path")
 run: build
@@ -37,7 +37,7 @@ serve: build
 
 ## fmt     Format all Go source files with gofmt
 fmt:
-	gofmt -w .
+	gofmt -w ./src
 
 ## vet     Run go vet
 vet:
@@ -56,6 +56,18 @@ clean:
 	go clean
 	-$(RM) $(OUT)
 
+## docker-build  Build the docker image
+docker-build:
+	docker build -t $(BINARY):latest .
+
+## docker-run    Run the docker image (with default binds)
+docker-run:
+	docker run --rm -it -p $(PORT):$(PORT) -e PORT=$(PORT) -v "$(ROOT)":/media $(BINARY):latest --serve /media
+
+## docker-clean  Remove the docker image
+docker-clean:
+	docker rmi $(BINARY):latest
+
 ## help    Show this help
 help:
 	@echo Usage: make [target]
@@ -67,5 +79,8 @@ help:
 	@echo   lint     Run staticcheck
 	@echo   test     Run tests
 	@echo   clean    Remove build artifacts
+	@echo   docker-build  Build docker image
+	@echo   docker-run    Run docker image
+	@echo   docker-clean  Remove docker image
 
 all: build

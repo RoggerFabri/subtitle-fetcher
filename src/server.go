@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -63,14 +64,22 @@ func newServer(db *sql.DB, root string, workers int) *server {
 func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Serve static files directly from the "web" directory.
-	// We use http.Dir to ensure the server reads from disk every time a file is requested.
-	fs := http.FileServer(http.Dir("web"))
+	// Serve static files conditionally: from disk if available (for dev), otherwise from embedded FS (prod).
+	var fsHandler http.Handler
+	if _, err := os.Stat("src/web"); err == nil {
+		fsHandler = http.FileServer(http.Dir("src/web"))
+	} else if _, err := os.Stat("web"); err == nil {
+		fsHandler = http.FileServer(http.Dir("web"))
+	} else {
+		sub, _ := fs.Sub(webFS, "web")
+		fsHandler = http.FileServer(http.FS(sub))
+	}
+
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api/") {
 			// Disable caching so changes to JS/CSS are reflected immediately on reload
 			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-			fs.ServeHTTP(w, r)
+			fsHandler.ServeHTTP(w, r)
 		}
 	}))
 
@@ -78,6 +87,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/hot-reload", s.handleHotReload)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("POST /api/settings", s.handleSaveSettings)
+	mux.HandleFunc("GET /api/export", s.handleExport)
+	mux.HandleFunc("POST /api/import", s.handleImport)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/health/test", s.handleTestConnection)
 	mux.HandleFunc("POST /api/health/provider-test", s.handleTestProvider)
@@ -132,11 +143,21 @@ func logMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *server) watchWeb() {
+	watchDir := ""
+	if _, err := os.Stat("src/web"); err == nil {
+		watchDir = "src/web"
+	} else if _, err := os.Stat("web"); err == nil {
+		watchDir = "web"
+	} else {
+		// running embedded, no hot-reload needed
+		return
+	}
+
 	lastMod := time.Now()
 	for {
 		time.Sleep(1 * time.Second)
 		changed := false
-		_ = filepath.Walk("web", func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(watchDir, func(path string, info os.FileInfo, err error) error {
 			if err == nil && !info.IsDir() && info.ModTime().After(lastMod) {
 				changed = true
 				lastMod = info.ModTime()
@@ -406,6 +427,87 @@ func (s *server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]string{"status": "ok"})
 }
 
+// --- export / import ---
+
+type exportDoc struct {
+	Version  int               `json:"version"`
+	Settings map[string]string `json:"settings"`
+	ImdbIDs  map[string]string `json:"imdb_ids"` // media name → imdb_id
+}
+
+func (s *server) handleExport(w http.ResponseWriter, r *http.Request) {
+	// Collect all settings.
+	rows, err := s.db.Query(`SELECT key, value FROM settings`)
+	if err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	settings := map[string]string{}
+	for rows.Next() {
+		var k, v string
+		rows.Scan(&k, &v)
+		settings[k] = v
+	}
+	rows.Close()
+
+	// Collect IMDB IDs keyed by media name (portable across machines).
+	mrows, err := s.db.Query(`SELECT name, imdb_id FROM media WHERE imdb_id != ''`)
+	if err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	imdbIDs := map[string]string{}
+	for mrows.Next() {
+		var name, id string
+		mrows.Scan(&name, &id)
+		imdbIDs[name] = id
+	}
+	mrows.Close()
+
+	doc := exportDoc{Version: 1, Settings: settings, ImdbIDs: imdbIDs}
+	b, _ := json.MarshalIndent(doc, "", "  ")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="subtitle-fetcher-export.json"`)
+	w.Write(b)
+}
+
+func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
+	var doc exportDoc
+	if err := json.NewDecoder(r.Body).Decode(&doc); err != nil {
+		jsonError(w, "invalid file", http.StatusBadRequest)
+		return
+	}
+	if doc.Version != 1 {
+		jsonError(w, fmt.Sprintf("unsupported export version %d", doc.Version), http.StatusBadRequest)
+		return
+	}
+
+	// Apply settings.
+	settingsApplied := 0
+	for k, v := range doc.Settings {
+		if err := setSetting(s.db, k, v); err == nil {
+			settingsApplied++
+		}
+	}
+
+	// Apply IMDB IDs — match by media name, skip unknowns.
+	imdbApplied := 0
+	for name, id := range doc.ImdbIDs {
+		res, err := s.db.Exec(`UPDATE media SET imdb_id=? WHERE name=? AND (imdb_id='' OR imdb_id=?)`, id, name, id)
+		if err == nil {
+			if n, _ := res.RowsAffected(); n > 0 {
+				imdbApplied++
+			}
+		}
+	}
+
+	jsonOK(w, map[string]any{
+		"settings_applied": settingsApplied,
+		"imdb_applied":     imdbApplied,
+		"imdb_total":       len(doc.ImdbIDs),
+	})
+}
+
 // --- health ---
 
 func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -667,6 +769,16 @@ func (s *server) fetchFilesFromDB(query string, args ...any) ([]apiFile, error) 
 }
 
 func (s *server) fetchSubtitlesForFiles(files []apiFile, media apiMedia) map[string]any {
+	pending := 0
+	for _, f := range files {
+		if !f.HasSubtitle {
+			pending++
+		}
+	}
+	if pending == 0 {
+		return map[string]any{"downloaded": 0, "failed": 0}
+	}
+
 	providers, err := loadProviders(s.db)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
@@ -692,12 +804,7 @@ func (s *server) fetchSubtitlesForFiles(files []apiFile, media apiMedia) map[str
 		}
 	}
 
-	pending := 0
-	for _, f := range files {
-		if !f.HasSubtitle {
-			pending++
-		}
-	}
+
 	fmt.Printf("[fetch] %s — %d file(s) to fetch, providers=%v\n", media.Name, pending, func() []string {
 		names := make([]string, len(providers))
 		for i, p := range providers {
@@ -879,7 +986,14 @@ func (s *server) handleSearchFile(w http.ResponseWriter, r *http.Request) {
 	show := showNameFromFolder(m.Name)
 	keywords := buildKeywords(show)
 	imdbID := m.ImdbID
-	if imdbID == "" {
+
+	searchFilePath := filePath
+	if q := r.URL.Query().Get("q"); q != "" {
+		show = q
+		keywords = buildKeywords(q)
+		imdbID = "" // Ignore IMDB ID if doing a custom text search
+		searchFilePath = "" // Clear path to prevent providers from inferring S/E and forcing constraints
+	} else if imdbID == "" {
 		imdbID = discoverIMDBID(show, m.Type)
 		if imdbID != "" {
 			s.db.Exec(`UPDATE media SET imdb_id=? WHERE id=?`, imdbID, m.ID)
@@ -892,7 +1006,7 @@ func (s *server) handleSearchFile(w http.ResponseWriter, r *http.Request) {
 	ch := make(chan []SubtitleCandidate, len(providers))
 	for _, p := range providers {
 		go func(p subtitleProvider) {
-			c, _ := p.SearchSubtitles(filePath, show, keywords, imdbID, m.Type)
+			c, _ := p.SearchSubtitles(searchFilePath, show, keywords, imdbID, m.Type)
 			ch <- c
 		}(p)
 	}

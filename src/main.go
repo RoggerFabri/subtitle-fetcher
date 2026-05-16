@@ -37,7 +37,11 @@ func main() {
 		fmt.Printf("Serving at http://localhost%s\n", addr)
 		fmt.Printf("Root:     %s\n", cfg.ServeRoot)
 		exe, _ := os.Executable()
-		fmt.Printf("Database: %s\n", filepath.Join(filepath.Dir(exe), "subtitles.db"))
+		dbDir := filepath.Join(filepath.Dir(exe), "data")
+		if env := os.Getenv("DB_PATH"); env != "" {
+			dbDir = env
+		}
+		fmt.Printf("Database: %s\n", filepath.Join(dbDir, "subtitles.db"))
 		fmt.Printf("Workers:  %d\n\n", cfg.Workers)
 		if err := http.ListenAndServe(addr, srv.routes()); err != nil {
 			fmt.Fprintf(os.Stderr, "Server error: %v\n", err)

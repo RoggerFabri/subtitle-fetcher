@@ -102,7 +102,7 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 					"episode_number": strconv.Itoa(episode),
 				})
 			}
-			if len(results) == 0 {
+			if len(results) == 0 && epTitle != "" {
 				label = "show+ep"
 				q := show + " " + epTitle
 				results, err = p.search(map[string]string{
@@ -240,6 +240,12 @@ func (p *subdlProvider) search(params map[string]string) ([]map[string]any, erro
 	}
 	u.RawQuery = q.Encode()
 
+	maskURL := u.String()
+	if strings.Contains(maskURL, "api_key=") {
+		maskURL = strings.Replace(maskURL, p.apiKey, "***", 1)
+	}
+	fmt.Printf("[subdl] api call: GET %s\n", maskURL)
+
 	req, _ := http.NewRequest("GET", u.String(), nil)
 	req.Header.Set("Accept", "application/json")
 	resp, err := p.hc.Do(req)
@@ -309,8 +315,10 @@ func (p *subdlProvider) SearchSubtitles(videoPath, show string, keywords []strin
 			res, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "imdb_id": "tt" + imdbID, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
 			add(res)
 		}
-		res1, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "film_name": show + " " + epTitle, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
-		add(res1)
+		if epTitle != "" {
+			res1, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "film_name": show + " " + epTitle, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
+			add(res1)
+		}
 		res2, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "film_name": show, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
 		add(res2)
 	}

@@ -4,49 +4,118 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Building and running
 
-```
+```bash
 make build
+
+# Web UI (primary mode)
+./subtitle-fetcher --serve <root> [--port 8080]
+
+# Legacy CLI batch fetch
 ./subtitle-fetcher -u <username> -p <password> -k <api-key> -d <directory> [-w <workers>]
 ```
 
 ### Makefile targets
 
 | Target | Description |
-|--------|-------------|
+| --- | --- |
 | `make build` | Compile to `subtitle-fetcher` / `subtitle-fetcher.exe` |
 | `make clean` | Remove compiled binaries |
 | `make fmt` | Format all Go source files with `gofmt` |
 | `make vet` | Run `go vet` |
 | `make test` | Run `go test ./...` |
 
-- `-w` defaults to 5 parallel download workers.
-- The program logs in, scans the directory recursively for video files, skips files that already have a subtitle sidecar, downloads missing ones, then logs out.
+## Repository layout
+
+```text
+src/                   Go source files (package main)
+src/web/               Static frontend
+src/web/index.html     Single-page shell + modal scaffolding
+src/web/style.css      Dark theme styles
+src/web/js/            ES module frontend
+  main.js              Entry point; wires DOM events, exposes window.app
+  api.js               All fetch() calls to the backend
+  state.js             Shared mutable state (providerOrder, mediaData, …)
+  utils.js             showToast, shared helpers
+  components/
+    mediaList.js       Library tab rendering
+    settings.js        Provider cards, export/import
+    actions.js         Fetch, delete, scan actions
+    modals.js          Subtitle picker + IMDB picker
+data/                  Runtime data (gitignored)
+  subtitles.db         SQLite database
+Dockerfile
+docker-compose.yaml
+```
 
 ## Architecture
 
-The program is split across several Go source files in `package main`:
+### Go source files (`src/`, `package main`)
 
-- `main.go` — entry point, orchestrates the fan-out and prints the final report
-- `config.go` — CLI flag parsing
-- `media.go` — video file discovery and subtitle sidecar detection
-- `opensubtitles.go` — OpenSubtitles API client (login, search, download, logout)
-- `imdb.go` — IMDB ID lookup via the IMDB suggestion API
-- `fetch.go` — `fetchSubtitle()` with three-strategy fallback
+| File | Responsibility |
+| --- | --- |
+| `main.go` | Entry point; dispatches to serve, scan, or legacy CLI mode |
+| `config.go` | CLI flag parsing; defines `Config` and mode helpers |
+| `server.go` | HTTP server, all API route handlers, `apiMedia`/`apiFile` types |
+| `db.go` | SQLite schema, migrations, `upsertMedia`, `upsertFile`; respects `DB_PATH` env var |
+| `scanner.go` | Recursive FS walk; writes scan results to DB |
+| `media.go` | Video file discovery, subtitle sidecar detection, `subtitlePath` |
+| `fetch.go` | `subtitleProvider` interface, `SubtitleCandidate` struct, `fetchWithProviders`, ZIP extraction |
+| `opensubtitles.go` | OpenSubtitles REST API client + `subtitleProvider` implementation |
+| `subdl.go` | SubDL API client + `subtitleProvider` implementation |
+| `wyzie.go` | Wyzie API client + `subtitleProvider` implementation |
+| `podnapisi.go` | Podnapisi provider (stub) |
+| `imdb.go` | IMDB suggestion API; `discoverIMDBID`, `fetchIMDBSuggestions`, `IMDBSuggestion` |
+| `ui.go` | `//go:embed web` + hot-reload SSE for dev |
 
-**Execution flow (top-level, imperative):**
-1. Parse CLI args and build the API client with the API key + bearer token from login.
-2. Derive the show name from the target folder name and look up its IMDB ID via the IMDB suggestion API.
-3. Walk the directory for video files; skip any that already have a subtitle sidecar (`.srt`, `.ass`, etc.).
-4. Fan out `fetchSubtitle()` calls via a semaphore-bounded goroutine pool.
-5. Log out and print a summary report.
+### Database (`data/subtitles.db`)
 
-**`fetchSubtitle()` — three-strategy fallback:**
-1. `imdb+S+E` — search by parent IMDB ID + season/episode (most precise).
-2. `show+ep` — search by show name + episode title keywords + season/episode.
-3. `show+S+E` — search by show name + season/episode only.
+Stored in `data/` next to the binary by default. Override with `DB_PATH` env var (used by Docker to point at the mounted volume).
 
-Each strategy result set is filtered by `matchesShow()` (keyword match against release name/title) and preferentially narrowed by parent IMDB ID match. The subtitle with the highest `download_count` is selected.
+- `media(id, path, name, type, imdb_id, last_scanned)` — one row per movie/series folder
+- `files(id, media_id, path, season, episode, has_subtitle, subtitle_name, last_seen)` — one row per video file
+- `settings(key, value)` — provider credentials, order, toggles
 
-**Rate limiting:** every search sleeps 1 s before the request; both search and download calls retry once after 10 s on HTTP 429.
+### Subtitle provider interface
 
-**Key API:** [OpenSubtitles REST API v1](https://api.opensubtitles.com/api/v1) — auth via `Api-Key` header + `Authorization: Bearer <token>`.
+```go
+type subtitleProvider interface {
+    Name() string
+    Open() error
+    Close()
+    FetchSubtitle(videoPath, show string, keywords []string, imdbID, mediaType string, printMu *sync.Mutex) bool
+    SearchSubtitles(videoPath, show string, keywords []string, imdbID, mediaType string) ([]SubtitleCandidate, error)
+    DownloadCandidate(handle, videoPath string) (string, error)
+}
+```
+
+`FetchSubtitle` is used by the auto-fetch path (stops at first success). `SearchSubtitles` + `DownloadCandidate` power the interactive picker modal.
+
+Download tokens use the format `"provider:handle"` (e.g. `"subdl:/subtitle/abc.zip"`, `"opensubtitles:12345"`), keeping the frontend opaque to provider internals.
+
+### IMDB ID caching
+
+`discoverIMDBID` is called at most once per media entry — the result is stored in `media.imdb_id` and reused on all subsequent fetches. Users can override it via the IMDB picker (`PUT /api/media/{id}/imdb`). The column is never overwritten during a rescan.
+
+### Key API routes
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/api/report` | Full media + file list with subtitle status |
+| `POST` | `/api/scan` | Trigger FS scan |
+| `GET` | `/api/scan/status` | Scan progress |
+| `POST` | `/api/fetch/media/{id}` | Fetch all missing subtitles for a media entry |
+| `POST` | `/api/fetch/season/{id}/{season}` | Fetch missing subtitles for one season |
+| `POST` | `/api/fetch/file/{id}` | Fetch subtitle for one file |
+| `POST` | `/api/search/file/{id}` | Return all candidates from all providers (picker) |
+| `POST` | `/api/download/file/{id}` | Download a specific candidate by token |
+| `DELETE` | `/api/subtitle/{id}` | Delete subtitle file + clear DB |
+| `GET` | `/api/imdb/search?q=` | Search IMDB suggestions |
+| `PUT` | `/api/media/{id}/imdb` | Persist user-chosen IMDB ID |
+| `GET` | `/api/settings` | Get provider settings |
+| `POST` | `/api/settings` | Save provider settings |
+| `GET` | `/api/export` | Download settings + IMDB IDs as JSON |
+| `POST` | `/api/import` | Apply exported JSON; matches IMDB IDs by media name |
+
+### Rate limiting
+
+OpenSubtitles: every search sleeps 1 s; HTTP 429/502/503/504 retries once after 10 s.

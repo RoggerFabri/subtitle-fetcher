@@ -47,7 +47,15 @@ func openDB(_ string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve symlinks: %w", err)
 	}
-	dbPath := filepath.Join(filepath.Dir(exe), "subtitles.db")
+	
+	dbDir := filepath.Join(filepath.Dir(exe), "data")
+	if envDb := os.Getenv("DB_PATH"); envDb != "" {
+		dbDir = envDb
+	}
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create db dir: %w", err)
+	}
+	dbPath := filepath.Join(dbDir, "subtitles.db")
 	db, err := sql.Open("sqlite", "file:"+dbPath+"?_busy_timeout=10000")
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)

@@ -1,0 +1,15 @@
+export const state = {
+  mediaData: [],
+  providerOrder: [],
+  providerEnabled: {},
+  providerFields: {},
+  providerConfigured: {},
+  providerDefs: [],
+  isScanning: false,
+  expandedIds: new Set(),
+  expandedSeasonIds: new Set(),
+  pickerFileId: null,
+  pickerCandidates: [],
+  imdbSearchTimer: null,
+  imdbTargetMediaId: null
+};

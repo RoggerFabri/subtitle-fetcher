@@ -1,0 +1,21 @@
+services:
+  subtitle-fetcher:
+    build: .
+    image: subtitle-fetcher:latest
+    container_name: subtitle-fetcher
+    ports:
+      # Map host port 8080 to container port 8080
+      - "8080:8080"
+    environment:
+      # The application will read this environment variable
+      - PORT=8080
+      # Tells the application to store its database here instead of the binary directory
+      - DB_PATH=/app/data
+    volumes:
+      # Bind mount the directory to serve.
+      # Replace "Z:\Shared\Downloads" with the actual path you want to scan/serve.
+      - /mnt/z/Shared/Downloads:/media
+      
+      # Bind mount a local folder to persist the SQLite database and settings
+      - ./data:/app/data
+    restart: unless-stopped

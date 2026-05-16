@@ -1,0 +1,26 @@
+# Git
+.git/
+.gitignore
+
+# Binaries
+subtitle-fetcher
+subtitle-fetcher.exe
+*.exe
+
+# Database & runtime data
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# IDE / tooling
+.vscode/
+.idea/
+.claude/
+.playwright-mcp/
+CLAUDE.md
+
+# Go test artifacts
+*.test
+*.out
+vendor/

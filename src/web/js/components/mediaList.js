@@ -1,0 +1,198 @@
+import { state } from '../state.js';
+import { getStatusColor } from '../utils.js';
+
+export function toggleExpand(id) {
+  if (state.expandedIds.has(id)) {
+    state.expandedIds.delete(id);
+  } else {
+    state.expandedIds.add(id);
+  }
+  renderList();
+}
+
+export function toggleSeasonExpand(mediaId, seasonNum, event) {
+  if (event) event.stopPropagation();
+  const key = `${mediaId}-${seasonNum}`;
+  if (state.expandedSeasonIds.has(key)) {
+    state.expandedSeasonIds.delete(key);
+  } else {
+    state.expandedSeasonIds.add(key);
+  }
+  renderList();
+}
+
+export function renderList() {
+  const container = document.getElementById('media-list');
+  if (!container) return;
+
+  const query = document.getElementById('search')?.value.toLowerCase() || "";
+  const typeFilter = document.getElementById('filter-type')?.value || "";
+  const statusFilter = document.getElementById('filter-status')?.value || "";
+
+  const filtered = (state.mediaData || []).filter(m => {
+    if (m.total_count === 0) return false;
+    const name = m.name || m.Name || "";
+    const type = m.type || m.Type || "";
+    const status = m.status || m.Status || "";
+    const matchesSearch = name.toLowerCase().includes(query);
+    const matchesType = !typeFilter || type === typeFilter;
+    const matchesStatus = !statusFilter ||
+      status === statusFilter ||
+      (statusFilter === 'missing' && status === 'partial');
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="padding: 20px; color: var(--muted); text-align: center;">No media items found.</div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(m => {
+    const id = m.id || m.Id;
+    const isExpanded = state.expandedIds.has(id);
+    const type = m.type || m.Type;
+    const label = type === 'series' ? 'Fetch All' : 'Fetch';
+    const imdbId = m.imdb_id || m.ImdbID || '';
+    const imdbChip = imdbId
+      ? `<a class="imdb-chip" href="https://www.imdb.com/title/tt${imdbId}/" target="_blank" onclick="event.stopPropagation()">IMDb ↗</a>`
+      : `<span class="imdb-chip unset" onclick="window.app.openImdbPicker(${id}, event)">+ IMDb</span>`;
+
+    let chooseBtn = '';
+    let fetchBtn = `<button class="fetch-btn" id="fetch-media-${id}" onclick="window.app.fetchMedia(${id}, event)">${label}</button>`;
+    if (type === 'movie') {
+      const files = m.files || m.Files || [];
+      if (files.length > 0) {
+        const firstFile = files[0];
+        const firstFileId = firstFile.id || firstFile.Id;
+        const hasSub = firstFile.has_subtitle || firstFile.HasSubtitle;
+        if (!hasSub) {
+          chooseBtn = `<button class="fetch-btn" onclick="window.app.openPicker(${firstFileId}, event)">Choose</button>`;
+        } else {
+          fetchBtn = '';
+        }
+      }
+    }
+
+    return `
+    <div class="media-card ${isExpanded ? 'expanded' : ''}">
+      <div class="media-header" onclick="window.app.toggleExpand(${id})">
+        <span class="badge badge-${type}">${type}</span>
+        <span class="media-name">${m.name || m.Name}</span>
+        <span class="coverage">${m.subtitles_count}/${m.total_count}</span>
+        <div class="dot dot-${getStatusColor(m.status)}"></div>
+        ${imdbChip}
+        ${fetchBtn}
+        ${chooseBtn}
+        <span class="chevron">${isExpanded ? '▾' : '▸'}</span>
+      </div>
+      ${isExpanded ? renderMediaBody(m) : ''}
+    </div>
+  `}).join('');
+}
+
+export function renderMediaBody(m) {
+  const type = m.type || m.Type;
+  const id = m.id || m.Id;
+  const files = m.files || m.Files || [];
+
+  if (type === 'movie') {
+    return `
+      <div class="media-body">
+        <div class="episode-list">
+          ${files.map(f => {
+            const hasSub = f.has_subtitle || f.HasSubtitle;
+            const name = f.name || f.Name || f.path || f.Path || '';
+            const subName = f.subtitle_name || f.SubtitleName || '';
+            return `
+              <div class="episode-row">
+                <span class="ep-label">${name}</span>
+                <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
+                ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.app.fetchFile(${f.id}, event)">Fetch</button><button class="fetch-btn" onclick="window.app.openPicker(${f.id}, event)">Choose</button>` : ''}
+              </div>
+              ${hasSub && subName ? `
+                <div class="subtitle-row">
+                  <span class="subtitle-filename">${subName}</span>
+                  <button class="subtitle-del-btn" onclick="window.app.deleteSubtitle(${f.id}, event)">Delete</button>
+                </div>
+              ` : ''}
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  const seasonsMap = {};
+  files.forEach(f => {
+    const sNum = (f.season != null) ? f.season : ((f.Season != null) ? f.Season : null);
+    const key = sNum != null ? sNum : 'unknown';
+    if (!seasonsMap[key]) seasonsMap[key] = { number: sNum, key, files: [] };
+    seasonsMap[key].files.push(f);
+  });
+  const seasonsArr = Object.values(seasonsMap).sort((a, b) => {
+    if (a.number == null) return 1;
+    if (b.number == null) return -1;
+    return a.number - b.number;
+  });
+
+  return `
+    <div class="media-body">
+      ${seasonsArr.map(s => {
+        const seasonKey = `${id}-${s.key}`;
+        const isSeasonExpanded = state.expandedSeasonIds.has(seasonKey);
+        const withSub = s.files.filter(f => f.has_subtitle || f.HasSubtitle).length;
+        const seasonLabel = s.number === 0 ? 'Specials' : s.number != null ? `Season ${s.number}` : 'Unknown';
+        return `
+          <div class="season-row" onclick="window.app.toggleSeasonExpand(${id}, '${s.key}', event)">
+            <span class="chevron" style="margin-right:8px; width:12px; display:inline-block">${isSeasonExpanded ? '▾' : '▸'}</span>
+            <span class="season-label">${seasonLabel}</span>
+            <span class="coverage">${withSub}/${s.files.length}</span>
+            ${s.number != null ? `<button class="fetch-btn" id="fetch-season-${id}-${s.key}" onclick="window.app.fetchSeason(${id}, ${s.number}, event)">Fetch Season</button>` : `<span style="font-size:11px;color:var(--muted)">Rescan to fix</span>`}
+          </div>
+          ${isSeasonExpanded ? renderEpisodes(id, s) : ''}
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+export function renderEpisodes(mediaId, season) {
+  return `
+    <div class="episode-list">
+      ${season.files.map(f => {
+        const epNum = f.episode !== undefined ? f.episode : (f.Episode || 0);
+        const name = f.name || f.Name || `Episode ${epNum}`;
+        const hasSub = f.has_subtitle || f.HasSubtitle;
+        const subName = f.subtitle_name || f.SubtitleName || '';
+        const epLabel = epNum > 0 ? `E${epNum.toString().padStart(2, '0')} — ` : '';
+        return `
+          <div class="episode-row">
+            <span class="ep-label">${epLabel}${name}</span>
+            <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
+            ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.app.fetchFile(${f.id}, event)">Fetch</button><button class="fetch-btn" onclick="window.app.openPicker(${f.id}, event)">Choose</button>` : ''}
+          </div>
+          ${hasSub && subName ? `
+            <div class="subtitle-row">
+              <span class="subtitle-filename">${subName}</span>
+              <button class="subtitle-del-btn" onclick="window.app.deleteSubtitle(${f.id}, event)">Delete</button>
+            </div>
+          ` : ''}
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+export function updateStats(stats) {
+  const el = document.getElementById('stats');
+  if (!el || !stats) return;
+  const movies = (state.mediaData || []).filter(m => (m.type || m.Type) === 'movie').length;
+  const series = (state.mediaData || []).filter(m => (m.type || m.Type) === 'series').length;
+  el.innerHTML = `
+    <div class="stat"><div class="stat-label">Total Files</div><div class="stat-value">${stats.total_files}</div></div>
+    <div class="stat"><div class="stat-label">Movies</div><div class="stat-value">${movies}</div></div>
+    <div class="stat"><div class="stat-label">Series</div><div class="stat-value">${series}</div></div>
+    <div class="stat"><div class="stat-label">Coverage</div><div class="stat-value">${stats.coverage}%</div></div>
+    <div class="stat"><div class="stat-label">Missing</div><div class="stat-value" style="color:var(--red)">${stats.missing}</div></div>
+  `;
+}

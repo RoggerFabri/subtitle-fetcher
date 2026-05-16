@@ -115,6 +115,8 @@ func (c *client) search(params map[string]string) ([]map[string]any, error) {
 	}
 	u.RawQuery = q.Encode()
 
+	fmt.Printf("[opensubtitles] api call: GET %s\n", u.String())
+
 	doReq := func() (*http.Response, error) {
 		req, _ := http.NewRequest("GET", u.String(), nil)
 		return c.do(req)
@@ -328,8 +330,10 @@ func (p *openSubtitlesProvider) SearchSubtitles(videoPath, show string, keywords
 			res, _ := p.cl.search(map[string]string{"parent_imdb_id": imdbID, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode), "languages": "en"})
 			collect(res)
 		}
-		res1, _ := p.cl.search(map[string]string{"query": show + " " + epTitle, "languages": "en", "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
-		collect(filterByShow(res1, keywords, imdbID))
+		if epTitle != "" {
+			res1, _ := p.cl.search(map[string]string{"query": show + " " + epTitle, "languages": "en", "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
+			collect(filterByShow(res1, keywords, imdbID))
+		}
 		res2, _ := p.cl.search(map[string]string{"query": show, "languages": "en", "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
 		collect(filterByShow(res2, keywords, imdbID))
 	} else {
@@ -338,6 +342,8 @@ func (p *openSubtitlesProvider) SearchSubtitles(videoPath, show string, keywords
 			res, _ := p.cl.search(map[string]string{"parent_imdb_id": imdbID, "languages": "en"})
 			collect(res)
 		}
+		res, _ := p.cl.search(map[string]string{"query": show, "languages": "en"})
+		collect(filterByShow(res, keywords, imdbID))
 	}
 
 	var out []SubtitleCandidate
@@ -450,7 +456,7 @@ func (p *openSubtitlesProvider) FetchSubtitle(videoPath, show string, keywords [
 			{
 				label: "show+ep",
 				run: func() ([]map[string]any, error) {
-					if !hasSE {
+					if !hasSE || epTitle == "" {
 						return nil, nil
 					}
 					res, err := p.cl.search(map[string]string{
@@ -476,6 +482,38 @@ func (p *openSubtitlesProvider) FetchSubtitle(videoPath, show string, keywords [
 						"languages":      "en",
 						"season_number":  strconv.Itoa(season),
 						"episode_number": strconv.Itoa(episode),
+					})
+					if err != nil {
+						return nil, err
+					}
+					return filterByShow(res, keywords, imdbID), nil
+				},
+			},
+			{
+				label: "imdb(specials)",
+				run: func() ([]map[string]any, error) {
+					if hasSE || imdbID == "" {
+						return nil, nil
+					}
+					res, err := p.cl.search(map[string]string{
+						"parent_imdb_id": imdbID,
+						"languages":      "en",
+					})
+					if err != nil {
+						return nil, err
+					}
+					return filterByShow(res, keywords, imdbID), nil
+				},
+			},
+			{
+				label: "show(specials)",
+				run: func() ([]map[string]any, error) {
+					if hasSE {
+						return nil, nil
+					}
+					res, err := p.cl.search(map[string]string{
+						"query":          show,
+						"languages":      "en",
 					})
 					if err != nil {
 						return nil, err
