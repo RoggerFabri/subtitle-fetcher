@@ -274,3 +274,10 @@ main { padding: 24px; }
 .save-all-btn {
   width: 100%; padding: 10px; font-size: 14px; margin-top: 4px;
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* fetch-btn in header row: keep it compact and non-growing */
+.media-header .fetch-btn { flex-shrink: 0; }

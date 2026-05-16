@@ -126,7 +126,11 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 	// Pick first keyword-matching result
 	best := results[0]
 	for _, r := range results {
-		if matchesShow(r, keywords) {
+		rel, _ := r["release_name"].(string)
+		if rel == "" {
+			rel, _ = r["name"].(string)
+		}
+		if matchesKeywords(rel, keywords) {
 			best = r
 			break
 		}
@@ -140,10 +144,16 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 
 	urlVal, ok := best["url"].(string)
 	if !ok {
-		lines = append(lines, "\n  No URL in response.")
+		var ks []string
+		for k := range best { ks = append(ks, k) }
+		lines = append(lines, fmt.Sprintf("\n  No URL in response (keys: %v)", ks))
 		return flush(false)
 	}
-	dlURL := subdlDLBase + "/" + urlVal + ".zip"
+	lines = append(lines, fmt.Sprintf("\n  url field: %q", urlVal))
+
+	// SubDL url field is already a full path like "/subtitle/abc.zip"
+	dlURL := "https://dl.subdl.com" + urlVal
+	lines = append(lines, fmt.Sprintf("\n  Downloading: %s", dlURL))
 
 	resp, err := p.hc.Get(dlURL)
 	if err != nil {

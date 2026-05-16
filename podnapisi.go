@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const podnapisiBase = "https://en.slo-podnapisi.net"
+const podnapisiBase = "https://www.podnapisi.net"
 
 // --- podnapisiProvider implements subtitleProvider via the Podnapisi API. ---
 
@@ -75,7 +75,8 @@ func (p *podnapisiProvider) FetchSubtitle(videoPath, show string, keywords []str
 	// Pick first keyword-matching result
 	best := results[0]
 	for _, r := range results {
-		if matchesShow(r, keywords) {
+		rel, _ := r["release"].(string)
+		if matchesKeywords(rel, keywords) {
 			best = r
 			break
 		}

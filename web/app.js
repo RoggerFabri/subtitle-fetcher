@@ -192,6 +192,7 @@ window.renderList = function() {
   const statusFilter = document.getElementById('filter-status')?.value || "";
 
   const filtered = (window.mediaData || []).filter(m => {
+    if (m.total_count === 0) return false;
     const name = m.name || m.Name || "";
     const type = m.type || m.Type || "";
     const status = m.status || m.Status || "";
@@ -210,6 +211,7 @@ window.renderList = function() {
     const id = m.id || m.Id;
     const isExpanded = window.expandedIds.has(id);
     const type = m.type || m.Type;
+    const label = type === 'series' ? 'Fetch All' : 'Fetch';
     return `
     <div class="media-card ${isExpanded ? 'expanded' : ''}">
       <div class="media-header" onclick="window.toggleExpand(${id})">
@@ -217,6 +219,7 @@ window.renderList = function() {
         <span class="media-name">${m.name || m.Name}</span>
         <span class="coverage">${m.subtitles_count}/${m.total_count}</span>
         <div class="dot dot-${getStatusColor(m.status)}"></div>
+        <button class="fetch-btn" id="fetch-media-${id}" onclick="window.fetchMedia(${id}, event)">${label}</button>
         <span class="chevron">${isExpanded ? '▾' : '▸'}</span>
       </div>
       ${isExpanded ? renderMediaBody(m) : ''}
@@ -227,18 +230,28 @@ window.renderList = function() {
 function renderMediaBody(m) {
   const type = m.type || m.Type;
   const id = m.id || m.Id;
+  const files = m.files || m.Files || [];
 
   if (type === 'movie') {
     return `
       <div class="media-body">
-        <div class="media-actions">
-          <button class="btn-fetch" onclick="window.fetchMedia(${id}, event)">Fetch Subtitles</button>
+        <div class="episode-list">
+          ${files.map(f => {
+            const hasSub = f.has_subtitle || f.HasSubtitle;
+            const name = f.name || f.Name || f.path || f.Path || '';
+            return `
+              <div class="episode-row">
+                <span class="ep-label">${name}</span>
+                <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
+                ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button>` : ''}
+              </div>
+            `;
+          }).join('')}
         </div>
       </div>
     `;
   }
 
-  const files = m.files || m.Files || [];
   const seasonsMap = {};
   files.forEach(f => {
     const sNum = f.season !== undefined ? f.season : (f.Season || 0);
@@ -252,12 +265,13 @@ function renderMediaBody(m) {
       ${seasonsArr.map(s => {
         const seasonKey = `${id}-${s.number}`;
         const isSeasonExpanded = window.expandedSeasonIds.has(seasonKey);
+        const withSub = s.files.filter(f => f.has_subtitle || f.HasSubtitle).length;
         return `
           <div class="season-row" onclick="window.toggleSeasonExpand(${id}, ${s.number}, event)">
             <span class="chevron" style="margin-right:8px; width:12px; display:inline-block">${isSeasonExpanded ? '▾' : '▸'}</span>
             <span class="season-label">Season ${s.number}</span>
-            <span class="coverage">${s.files.filter(f => f.has_subtitle || f.HasSubtitle).length}/${s.files.length}</span>
-            <button class="btn-fetch" onclick="window.fetchSeason(${id}, ${s.number}, event)">Fetch Season</button>
+            <span class="coverage">${withSub}/${s.files.length}</span>
+            <button class="fetch-btn" id="fetch-season-${id}-${s.number}" onclick="window.fetchSeason(${id}, ${s.number}, event)">Fetch Season</button>
           </div>
           ${isSeasonExpanded ? renderEpisodes(id, s) : ''}
         `;
@@ -310,27 +324,33 @@ function getStatusColor(status) {
 
 window.fetchMedia = async function(id, event) {
   if (event) event.stopPropagation();
-  showToast("Fetching subtitles...", "info");
+  const btn = document.getElementById(`fetch-media-${id}`);
+  setFetching(btn, true);
   try {
     const res = await fetch(`/api/fetch/media/${id}`, { method: 'POST' });
     const data = await res.json();
     showToast(`Done: ${data.downloaded} downloaded, ${data.failed} failed`);
-    refreshData();
+    await refreshMediaAndStats();
   } catch (err) {
     showToast("Fetch failed", "error");
+  } finally {
+    setFetching(btn, false);
   }
 };
 
 window.fetchSeason = async function(id, season, event) {
   if (event) event.stopPropagation();
-  showToast("Fetching subtitles for season...", "info");
+  const btn = document.getElementById(`fetch-season-${id}-${season}`);
+  setFetching(btn, true);
   try {
     const res = await fetch(`/api/fetch/season/${id}/${season}`, { method: 'POST' });
     const data = await res.json();
     showToast(`Done: ${data.downloaded} downloaded, ${data.failed} failed`);
-    refreshData();
+    await refreshMediaAndStats();
   } catch (err) {
     showToast("Fetch failed", "error");
+  } finally {
+    setFetching(btn, false);
   }
 };
 
@@ -364,11 +384,21 @@ window.fetchFile = async function(id, event) {
 function updateStats(stats) {
   const el = document.getElementById('stats');
   if (!el || !stats) return;
+  const movies = (window.mediaData || []).filter(m => (m.type || m.Type) === 'movie').length;
+  const series = (window.mediaData || []).filter(m => (m.type || m.Type) === 'series').length;
   el.innerHTML = `
     <div class="stat"><div class="stat-label">Total Files</div><div class="stat-value">${stats.total_files}</div></div>
-    <div class="stat"><div class="stat-label">Missing</div><div class="stat-value" style="color:var(--red)">${stats.missing}</div></div>
+    <div class="stat"><div class="stat-label">Movies</div><div class="stat-value">${movies}</div></div>
+    <div class="stat"><div class="stat-label">Series</div><div class="stat-value">${series}</div></div>
     <div class="stat"><div class="stat-label">Coverage</div><div class="stat-value">${stats.coverage}%</div></div>
+    <div class="stat"><div class="stat-label">Missing</div><div class="stat-value" style="color:var(--red)">${stats.missing}</div></div>
   `;
+}
+
+function setFetching(btn, on) {
+  if (!btn) return;
+  btn.disabled = on;
+  btn.classList.toggle('fetching', on);
 }
 
 function showToast(msg, type = "success") {
@@ -386,6 +416,7 @@ function renderSettings() {
   const container = document.getElementById('provider-list');
   if (!container) return;
 
+  const lastIdx = window.providerOrder.length - 1;
   container.innerHTML = window.providerOrder.map((name, index) => {
     const isEnabled = window.providerEnabled[name];
     if (!window.providerFields[name]) window.providerFields[name] = {};
@@ -424,6 +455,8 @@ function renderSettings() {
           <span class="provider-rank">${index + 1}</span>
           <span class="provider-name">${name}</span>
           <div class="provider-actions">
+            <button class="btn-sm" onclick="window.moveProvider('${name}', -1)" ${index === 0 ? 'disabled' : ''} title="Move up">↑</button>
+            <button class="btn-sm" onclick="window.moveProvider('${name}',  1)" ${index === lastIdx ? 'disabled' : ''} title="Move down">↓</button>
             <button class="btn-sm btn-test" onclick="window.testProvider('${name}')">Test</button>
             <label class="provider-toggle-label">
               <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.providerEnabled['${name}'] = this.checked; window.saveAllProviders();">
@@ -432,11 +465,20 @@ function renderSettings() {
         </div>
         <div class="provider-body">
           ${fieldsHtml}
+          <div class="test-result hidden" id="test-result-${name}"></div>
         </div>
       </div>
     `;
   }).join('');
 }
+
+window.moveProvider = function(name, dir) {
+  const i = window.providerOrder.indexOf(name);
+  const j = i + dir;
+  if (j < 0 || j >= window.providerOrder.length) return;
+  [window.providerOrder[i], window.providerOrder[j]] = [window.providerOrder[j], window.providerOrder[i]];
+  renderSettings();
+};
 
 /**
  * Persists all provider settings to the backend
@@ -463,5 +505,39 @@ window.saveAllProviders = async function() {
 }
 
 window.testProvider = async function(name) {
-  showToast(`Testing ${name} connection...`, "info");
+  const resultEl = document.getElementById(`test-result-${name}`);
+  const btn = document.querySelector(`button[onclick="window.testProvider('${name}')"]`);
+  if (btn) { btn.disabled = true; btn.textContent = '...'; }
+  if (resultEl) { resultEl.className = 'test-result'; resultEl.textContent = 'Testing…'; }
+
+  try {
+    const res = await fetch(`/api/health/provider-test?provider=${name}`, { method: 'POST' });
+    const data = await res.json();
+
+    if (!resultEl) return;
+    if (res.ok && !data.error) {
+      let msg = '';
+      if (name === 'opensubtitles' && data.downloads_remaining !== undefined) {
+        msg = `✓ Connected — ${data.downloads_remaining} downloads remaining today`;
+      } else if (data.results !== undefined) {
+        msg = `✓ Connected — ${data.results} result(s) returned`;
+      } else {
+        msg = `✓ Connected`;
+      }
+      resultEl.className = 'test-result ok';
+      resultEl.textContent = msg;
+    } else {
+      resultEl.className = 'test-result error';
+      resultEl.textContent = `✗ ${data.error || 'Connection failed'}`;
+    }
+    resultEl.classList.remove('hidden');
+  } catch (err) {
+    if (resultEl) {
+      resultEl.className = 'test-result error';
+      resultEl.textContent = `✗ ${err.message}`;
+      resultEl.classList.remove('hidden');
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Test'; }
+  }
 };

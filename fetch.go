@@ -47,6 +47,17 @@ func extractSRTFromZip(data []byte) ([]byte, error) {
 	return nil, fmt.Errorf("no .srt file in ZIP")
 }
 
+// matchesKeywords reports whether text contains any of the given keywords (case-insensitive).
+func matchesKeywords(text string, keywords []string) bool {
+	t := strings.ToLower(text)
+	for _, kw := range keywords {
+		if strings.Contains(t, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 // filterByShow applies keyword matching and optional parent-IMDB narrowing to raw search results.
 func filterByShow(results []map[string]any, keywords []string, parentIMDBID string) []map[string]any {
 	var out []map[string]any
