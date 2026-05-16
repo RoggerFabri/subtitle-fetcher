@@ -259,12 +259,19 @@ function renderMediaBody(m) {
           ${files.map(f => {
             const hasSub = f.has_subtitle || f.HasSubtitle;
             const name = f.name || f.Name || f.path || f.Path || '';
+            const subName = f.subtitle_name || f.SubtitleName || '';
             return `
               <div class="episode-row">
                 <span class="ep-label">${name}</span>
                 <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
                 ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button>` : ''}
               </div>
+              ${hasSub && subName ? `
+                <div class="subtitle-row">
+                  <span class="subtitle-filename">${subName}</span>
+                  <button class="subtitle-del-btn" onclick="window.deleteSubtitle(${f.id}, event)">Delete</button>
+                </div>
+              ` : ''}
             `;
           }).join('')}
         </div>
@@ -324,15 +331,20 @@ function renderEpisodes(mediaId, season) {
         const epNum = f.episode !== undefined ? f.episode : (f.Episode || 0);
         const name = f.name || f.Name || `Episode ${epNum}`;
         const hasSub = f.has_subtitle || f.HasSubtitle;
+        const subName = f.subtitle_name || f.SubtitleName || '';
         const epLabel = epNum > 0 ? `E${epNum.toString().padStart(2, '0')} — ` : '';
         return `
           <div class="episode-row">
             <span class="ep-label">${epLabel}${name}</span>
             <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
-            ${!hasSub ? `
-              <button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button>
-            ` : ''}
+            ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button>` : ''}
           </div>
+          ${hasSub && subName ? `
+            <div class="subtitle-row">
+              <span class="subtitle-filename">${subName}</span>
+              <button class="subtitle-del-btn" onclick="window.deleteSubtitle(${f.id}, event)">Delete</button>
+            </div>
+          ` : ''}
         `;
       }).join('')}
     </div>
@@ -410,6 +422,30 @@ window.fetchFile = async function(id, event) {
       btn.classList.remove('fetching');
       btn.disabled = false;
     }
+  }
+};
+
+window.deleteSubtitle = async function(id, event) {
+  if (event) event.stopPropagation();
+  const btn = event.currentTarget;
+  const info = fileInfoById(id);
+  const label = info
+    ? `"${info.media.name || info.media.Name}"${info.file.episode != null ? ` E${String(info.file.episode).padStart(2,'0')}` : ''}`
+    : 'file';
+  btn.disabled = true;
+  try {
+    const res = await fetch(`/api/subtitle/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(`${label} — delete failed: ${data.error}`, 'error');
+    } else {
+      showToast(`${label} — subtitle deleted`, 'info');
+      await refreshMediaAndStats();
+    }
+  } catch (err) {
+    showToast(`${label} — delete failed`, 'error');
+  } finally {
+    btn.disabled = false;
   }
 };
 

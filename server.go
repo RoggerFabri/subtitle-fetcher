@@ -86,6 +86,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/fetch/media/{id}", s.handleFetchMedia)
 	mux.HandleFunc("POST /api/fetch/season/{id}/{season}", s.handleFetchSeason)
 	mux.HandleFunc("POST /api/fetch/file/{id}", s.handleFetchFile)
+	mux.HandleFunc("DELETE /api/subtitle/{id}", s.handleDeleteSubtitle)
 	return logMiddleware(mux)
 }
 
@@ -211,12 +212,13 @@ func (s *server) handleScanStatus(w http.ResponseWriter, r *http.Request) {
 // --- report ---
 
 type apiFile struct {
-	ID          int64  `json:"id"`
-	Path        string `json:"path"`
-	Name        string `json:"name"`
-	Season      *int   `json:"season"`
-	Episode     *int   `json:"episode"`
-	HasSubtitle bool   `json:"has_subtitle"`
+	ID           int64  `json:"id"`
+	Path         string `json:"path"`
+	Name         string `json:"name"`
+	Season       *int   `json:"season"`
+	Episode      *int   `json:"episode"`
+	HasSubtitle  bool   `json:"has_subtitle"`
+	SubtitleName string `json:"subtitle_name,omitempty"`
 }
 
 type apiMedia struct {
@@ -247,7 +249,7 @@ func (s *server) handleReport(w http.ResponseWriter, r *http.Request) {
 
 	for i := range result {
 		frows, err := s.db.Query(`
-			SELECT id, path, season, episode, has_subtitle
+			SELECT id, path, season, episode, has_subtitle, subtitle_name
 			FROM files WHERE media_id = ?
 			ORDER BY season, episode`, result[i].ID)
 		if err != nil {
@@ -258,7 +260,7 @@ func (s *server) handleReport(w http.ResponseWriter, r *http.Request) {
 			var f apiFile
 			var season, episode sql.NullInt64
 			var hasSub int
-			if err := frows.Scan(&f.ID, &f.Path, &season, &episode, &hasSub); err != nil {
+			if err := frows.Scan(&f.ID, &f.Path, &season, &episode, &hasSub, &f.SubtitleName); err != nil {
 				frows.Close()
 				jsonError(w, err.Error(), 500)
 				return
@@ -714,7 +716,11 @@ func (s *server) fetchSubtitlesForFiles(files []apiFile, media apiMedia) map[str
 			defer mu.Unlock()
 			if success {
 				ok++
-				s.db.Exec(`UPDATE files SET has_subtitle=1 WHERE id=?`, file.ID)
+				subName := ""
+				if sp := subtitlePath(file.Path); sp != "" {
+					subName = baseName(sp)
+				}
+				s.db.Exec(`UPDATE files SET has_subtitle=1, subtitle_name=? WHERE id=?`, subName, file.ID)
 			} else {
 				failed++
 			}
@@ -802,6 +808,30 @@ func (s *server) handleFetchFile(w http.ResponseWriter, r *http.Request) {
 	s.db.QueryRow(`SELECT id, name, type FROM media WHERE id=?`, mediaID).Scan(&m.ID, &m.Name, &m.Type)
 
 	jsonOK(w, s.fetchSubtitlesForFiles([]apiFile{f}, m))
+}
+
+func (s *server) handleDeleteSubtitle(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	var path string
+	if err := s.db.QueryRow(`SELECT path FROM files WHERE id=?`, id).Scan(&path); err != nil {
+		jsonError(w, "not found", http.StatusNotFound)
+		return
+	}
+	sp := subtitlePath(path)
+	if sp == "" {
+		jsonError(w, "no subtitle found on disk", http.StatusNotFound)
+		return
+	}
+	if err := os.Remove(sp); err != nil {
+		jsonError(w, "delete failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.db.Exec(`UPDATE files SET has_subtitle=0, subtitle_name='' WHERE id=?`, id)
+	jsonOK(w, map[string]any{"deleted": baseName(sp)})
 }
 
 // --- helpers ---

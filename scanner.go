@@ -24,10 +24,11 @@ type scanEntry struct {
 }
 
 type fileResult struct {
-	path        string
-	season      *int
-	episode     *int
-	hasSubtitle bool
+	path         string
+	season       *int
+	episode      *int
+	hasSubtitle  bool
+	subtitleName string
 }
 
 type scanResult struct {
@@ -174,7 +175,12 @@ func scanMovieFS(dir string) ([]fileResult, error) {
 			continue
 		}
 		path := filepath.Join(dir, e.Name())
-		files = append(files, fileResult{path: path, hasSubtitle: hasSubtitle(path)})
+		sp := subtitlePath(path)
+		subName := ""
+		if sp != "" {
+			subName = filepath.Base(sp)
+		}
+		files = append(files, fileResult{path: path, hasSubtitle: sp != "", subtitleName: subName})
 	}
 	return files, nil
 }
@@ -204,7 +210,12 @@ func scanSeriesFS(dir string) ([]fileResult, error) {
 			stem := strings.TrimSuffix(fe.Name(), filepath.Ext(fe.Name()))
 			_, ep, hasSE := parseSeasonEpisode(stem)
 
-			fr := fileResult{path: path, hasSubtitle: hasSubtitle(path)}
+			sp := subtitlePath(path)
+			subName := ""
+			if sp != "" {
+				subName = filepath.Base(sp)
+			}
+			fr := fileResult{path: path, hasSubtitle: sp != "", subtitleName: subName}
 			if seasonNum >= 0 {
 				sn := seasonNum
 				fr.season = &sn
@@ -224,7 +235,7 @@ func writeResultToDB(db *sql.DB, r scanResult) error {
 		return err
 	}
 	for _, f := range r.files {
-		if err := upsertFile(db, mediaID, f.path, f.season, f.episode, f.hasSubtitle); err != nil {
+		if err := upsertFile(db, mediaID, f.path, f.season, f.episode, f.hasSubtitle, f.subtitleName); err != nil {
 			return err
 		}
 	}

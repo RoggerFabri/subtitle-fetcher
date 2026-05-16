@@ -32,6 +32,18 @@ func hasSubtitle(videoPath string) bool {
 	return false
 }
 
+func subtitlePath(videoPath string) string {
+	ext := filepath.Ext(videoPath)
+	base := videoPath[:len(videoPath)-len(ext)]
+	for _, sext := range subtitleExts {
+		p := base + sext
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
 func parseSeasonEpisode(name string) (season, episode int, ok bool) {
 	m := seRegex.FindStringSubmatch(name)
 	if m == nil {

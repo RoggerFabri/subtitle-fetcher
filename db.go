@@ -25,13 +25,14 @@ CREATE TABLE IF NOT EXISTS media (
 );
 
 CREATE TABLE IF NOT EXISTS files (
-    id           INTEGER PRIMARY KEY,
-    media_id     INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
-    path         TEXT    NOT NULL UNIQUE,
-    season       INTEGER,
-    episode      INTEGER,
-    has_subtitle INTEGER NOT NULL DEFAULT 0,
-    last_seen    TEXT    NOT NULL
+    id            INTEGER PRIMARY KEY,
+    media_id      INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    path          TEXT    NOT NULL UNIQUE,
+    season        INTEGER,
+    episode       INTEGER,
+    has_subtitle  INTEGER NOT NULL DEFAULT 0,
+    subtitle_name TEXT    NOT NULL DEFAULT '',
+    last_seen     TEXT    NOT NULL
 );
 `
 
@@ -59,6 +60,8 @@ func openDB(_ string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
+	// Migration: add subtitle_name for existing DBs (no-op if already present).
+	db.Exec(`ALTER TABLE files ADD COLUMN subtitle_name TEXT NOT NULL DEFAULT ''`)
 	return db, nil
 }
 
@@ -90,20 +93,21 @@ func upsertMedia(db *sql.DB, path, name, typ string) (int64, error) {
 	return id, err
 }
 
-func upsertFile(db *sql.DB, mediaID int64, path string, season, episode *int, hasSubtitle bool) error {
+func upsertFile(db *sql.DB, mediaID int64, path string, season, episode *int, hasSubtitle bool, subtitleName string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	sub := 0
 	if hasSubtitle {
 		sub = 1
 	}
 	_, err := db.Exec(`
-		INSERT INTO files(media_id, path, season, episode, has_subtitle, last_seen)
-		VALUES(?, ?, ?, ?, ?, ?)
+		INSERT INTO files(media_id, path, season, episode, has_subtitle, subtitle_name, last_seen)
+		VALUES(?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
-			season       = excluded.season,
-			episode      = excluded.episode,
-			has_subtitle = excluded.has_subtitle,
-			last_seen    = excluded.last_seen`,
-		mediaID, path, season, episode, sub, now)
+			season        = excluded.season,
+			episode       = excluded.episode,
+			has_subtitle  = excluded.has_subtitle,
+			subtitle_name = excluded.subtitle_name,
+			last_seen     = excluded.last_seen`,
+		mediaID, path, season, episode, sub, subtitleName, now)
 	return err
 }
