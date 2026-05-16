@@ -83,7 +83,7 @@ func (c *client) login(username, password string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
 		return fmt.Errorf("login failed %d: %s", resp.StatusCode, data)
 	}
 
@@ -127,7 +127,7 @@ func (c *client) search(params map[string]string) ([]map[string]any, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
 		return nil, fmt.Errorf("search failed %d: %s", resp.StatusCode, data)
 	}
 
@@ -155,7 +155,7 @@ func (c *client) requestDownload(fileID int) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
 		return "", fmt.Errorf("download request failed %d: %s", resp.StatusCode, data)
 	}
 
@@ -185,7 +185,7 @@ func (c *client) getUser() (*userInfo, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		data, _ := io.ReadAll(resp.Body)
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
 		return nil, fmt.Errorf("user info failed %d: %s", resp.StatusCode, data)
 	}
 	var result struct {
@@ -295,6 +295,95 @@ func (p *openSubtitlesProvider) Close() {
 	if p.cl != nil {
 		p.cl.logout()
 	}
+}
+
+func (p *openSubtitlesProvider) SearchSubtitles(videoPath, show string, keywords []string, imdbID, mediaType string) ([]SubtitleCandidate, error) {
+	stem := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	season, episode, hasSE := parseSeasonEpisode(stem)
+	epTitle := episodeTitleFromStem(stem)
+
+	var all []map[string]any
+	seen := map[int]bool{}
+
+	collect := func(res []map[string]any) {
+		for _, r := range res {
+			fid, ok := fileID(r)
+			if !ok || seen[fid] {
+				continue
+			}
+			seen[fid] = true
+			all = append(all, r)
+		}
+	}
+
+	if mediaType == "movie" {
+		if imdbID != "" {
+			res, _ := p.cl.search(map[string]string{"imdb_id": imdbID, "languages": "en"})
+			collect(filterByShow(res, keywords, ""))
+		}
+		res, _ := p.cl.search(map[string]string{"query": show, "languages": "en"})
+		collect(filterByShow(res, keywords, ""))
+	} else if hasSE {
+		if imdbID != "" {
+			res, _ := p.cl.search(map[string]string{"parent_imdb_id": imdbID, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode), "languages": "en"})
+			collect(res)
+		}
+		res1, _ := p.cl.search(map[string]string{"query": show + " " + epTitle, "languages": "en", "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
+		collect(filterByShow(res1, keywords, imdbID))
+		res2, _ := p.cl.search(map[string]string{"query": show, "languages": "en", "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
+		collect(filterByShow(res2, keywords, imdbID))
+	} else {
+		// specials / no S+E: broad search by show name
+		if imdbID != "" {
+			res, _ := p.cl.search(map[string]string{"parent_imdb_id": imdbID, "languages": "en"})
+			collect(res)
+		}
+	}
+
+	var out []SubtitleCandidate
+	for _, r := range all {
+		fid, ok := fileID(r)
+		if !ok {
+			continue
+		}
+		out = append(out, SubtitleCandidate{
+			Provider:  "opensubtitles",
+			Name:      attrString(r, "release"),
+			Downloads: downloadCount(r),
+			Format:    "srt",
+			Token:     fmt.Sprintf("opensubtitles:%d", fid),
+		})
+	}
+	return out, nil
+}
+
+func (p *openSubtitlesProvider) DownloadCandidate(handle, videoPath string) (string, error) {
+	fid, err := strconv.Atoi(handle)
+	if err != nil {
+		return "", fmt.Errorf("invalid file id: %w", err)
+	}
+	dlLink, err := p.cl.requestDownload(fid)
+	if err != nil {
+		return "", err
+	}
+	resp, err := http.Get(dlLink) //nolint:noctx
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
+		return "", fmt.Errorf("subtitle download failed %d: %s", resp.StatusCode, snippet)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	outPath := strings.TrimSuffix(videoPath, filepath.Ext(videoPath)) + ".srt"
+	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+		return "", err
+	}
+	return filepath.Base(outPath), nil
 }
 
 func (p *openSubtitlesProvider) FetchSubtitle(videoPath, show string, keywords []string, imdbID, mediaType string, printMu *sync.Mutex) bool {

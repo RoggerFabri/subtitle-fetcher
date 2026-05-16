@@ -10,12 +10,26 @@ import (
 	"sync"
 )
 
+// SubtitleCandidate is one search result returned by SearchSubtitles.
+type SubtitleCandidate struct {
+	Provider  string `json:"provider"`
+	Name      string `json:"name"`      // release name
+	Downloads int    `json:"downloads"` // 0 if unknown
+	Format    string `json:"format"`    // "srt", "ass", etc.
+	Token     string `json:"token"`     // opaque download handle: "provider:handle"
+}
+
 // subtitleProvider is implemented by every subtitle source.
 type subtitleProvider interface {
 	Name() string
 	Open() error // login / init — no-op for providers without auth
 	Close()      // logout / cleanup
 	FetchSubtitle(videoPath, show string, keywords []string, imdbID, mediaType string, printMu *sync.Mutex) bool
+	// SearchSubtitles returns all candidates without downloading.
+	SearchSubtitles(videoPath, show string, keywords []string, imdbID, mediaType string) ([]SubtitleCandidate, error)
+	// DownloadCandidate downloads the subtitle identified by handle and saves it next to videoPath.
+	// Returns the saved filename.
+	DownloadCandidate(handle, videoPath string) (string, error)
 }
 
 // fetchWithProviders tries each provider in order, stopping at first success.

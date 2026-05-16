@@ -265,3 +265,86 @@ func (p *subdlProvider) search(params map[string]string) ([]map[string]any, erro
 	}
 	return result.Subtitles, nil
 }
+
+func (p *subdlProvider) SearchSubtitles(videoPath, show string, keywords []string, imdbID, mediaType string) ([]SubtitleCandidate, error) {
+	stem := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	season, episode, hasSE := parseSeasonEpisode(stem)
+	epTitle := episodeTitleFromStem(stem)
+	isSpecial := mediaType != "movie" && (!hasSE || season == 0)
+
+	seen := map[string]bool{}
+	var all []map[string]any
+
+	add := func(results []map[string]any) {
+		for _, r := range results {
+			u, _ := r["url"].(string)
+			if u == "" || seen[u] {
+				continue
+			}
+			seen[u] = true
+			all = append(all, r)
+		}
+	}
+
+	if mediaType == "movie" {
+		if imdbID != "" {
+			res, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "movie", "imdb_id": "tt" + imdbID})
+			add(res)
+		}
+		res, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "movie", "film_name": show})
+		add(res)
+	} else if isSpecial {
+		if imdbID != "" {
+			res, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "imdb_id": "tt" + imdbID})
+			add(res)
+		}
+		q := show
+		if epTitle != "" {
+			q += " " + epTitle
+		}
+		res, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "film_name": q})
+		add(res)
+	} else {
+		if imdbID != "" {
+			res, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "imdb_id": "tt" + imdbID, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
+			add(res)
+		}
+		res1, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "film_name": show + " " + epTitle, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
+		add(res1)
+		res2, _ := p.search(map[string]string{"api_key": p.apiKey, "languages": "EN", "type": "tv", "film_name": show, "season_number": strconv.Itoa(season), "episode_number": strconv.Itoa(episode)})
+		add(res2)
+	}
+
+	var out []SubtitleCandidate
+	for _, r := range all {
+		name, _ := r["release_name"].(string)
+		if name == "" {
+			name, _ = r["name"].(string)
+		}
+		u, _ := r["url"].(string)
+		out = append(out, SubtitleCandidate{Provider: "subdl", Name: name, Format: "srt", Token: "subdl:" + u})
+	}
+	return out, nil
+}
+
+func (p *subdlProvider) DownloadCandidate(handle, videoPath string) (string, error) {
+	dlURL := "https://dl.subdl.com" + handle
+	resp, err := p.hc.Get(dlURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	srt, err := extractSRTFromZip(data)
+	if err != nil {
+		return "", err
+	}
+	outPath := strings.TrimSuffix(videoPath, filepath.Ext(videoPath)) + ".srt"
+	if err := os.WriteFile(outPath, srt, 0o644); err != nil {
+		return "", err
+	}
+	return filepath.Base(outPath), nil
+}

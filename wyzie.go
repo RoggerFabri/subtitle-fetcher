@@ -137,6 +137,70 @@ func (p *wyzieProvider) FetchSubtitle(videoPath, show string, keywords []string,
 	return flush(true)
 }
 
+func (p *wyzieProvider) SearchSubtitles(videoPath, show string, keywords []string, imdbID, mediaType string) ([]SubtitleCandidate, error) {
+	if imdbID == "" {
+		return nil, nil
+	}
+	stem := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	season, episode, hasSE := parseSeasonEpisode(stem)
+	isSpecial := mediaType == "series" && (!hasSE || season == 0)
+
+	var results []map[string]any
+	var err error
+	if isSpecial {
+		results, err = p.search(imdbID, 0, 0, false)
+	} else {
+		results, err = p.search(imdbID, season, episode, mediaType == "series")
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var out []SubtitleCandidate
+	for _, r := range results {
+		name, _ := r["release"].(string)
+		u, _ := r["url"].(string)
+		if u == "" {
+			continue
+		}
+		downloads := 0
+		if d, ok := r["downloadCount"].(float64); ok {
+			downloads = int(d)
+		}
+		format := "srt"
+		if f, ok := r["format"].(string); ok && f != "" {
+			format = f
+		}
+		out = append(out, SubtitleCandidate{Provider: "wyzie", Name: name, Downloads: downloads, Format: format, Token: "wyzie:" + u})
+	}
+	return out, nil
+}
+
+func (p *wyzieProvider) DownloadCandidate(handle, videoPath string) (string, error) {
+	dlURL := handle
+	if !strings.Contains(dlURL, "format=") {
+		sep := "?"
+		if strings.Contains(dlURL, "?") {
+			sep = "&"
+		}
+		dlURL += sep + "format=srt&encoding=utf-8"
+	}
+	resp, err := p.hc.Get(dlURL)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	outPath := strings.TrimSuffix(videoPath, filepath.Ext(videoPath)) + ".srt"
+	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+		return "", err
+	}
+	return filepath.Base(outPath), nil
+}
+
 func (p *wyzieProvider) search(imdbID string, season, episode int, hasSE bool) ([]map[string]any, error) {
 	u, _ := url.Parse(wyzieBase)
 	q := u.Query()

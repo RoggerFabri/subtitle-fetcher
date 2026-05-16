@@ -264,7 +264,7 @@ function renderMediaBody(m) {
               <div class="episode-row">
                 <span class="ep-label">${name}</span>
                 <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
-                ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button>` : ''}
+                ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button><button class="fetch-btn" onclick="window.openPicker(${f.id}, event)">Choose</button>` : ''}
               </div>
               ${hasSub && subName ? `
                 <div class="subtitle-row">
@@ -337,7 +337,7 @@ function renderEpisodes(mediaId, season) {
           <div class="episode-row">
             <span class="ep-label">${epLabel}${name}</span>
             <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
-            ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button>` : ''}
+            ${!hasSub ? `<button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button><button class="fetch-btn" onclick="window.openPicker(${f.id}, event)">Choose</button>` : ''}
           </div>
           ${hasSub && subName ? `
             <div class="subtitle-row">
@@ -448,6 +448,90 @@ window.deleteSubtitle = async function(id, event) {
     btn.disabled = false;
   }
 };
+
+window.openPicker = async function(fileId, event) {
+  if (event) event.stopPropagation();
+  window._pickerFileId = fileId;
+  const modal = document.getElementById('picker-modal');
+  const body = document.getElementById('picker-body');
+  const title = document.getElementById('picker-title');
+  const info = fileInfoById(fileId);
+  const filePath = info?.file?.path || info?.file?.Path || '';
+  const fileName = filePath ? filePath.replace(/.*[/\\]/, '') : '';
+  title.textContent = fileName || 'Choose Subtitle';
+  body.innerHTML = '<div class="picker-loading">Searching providers…</div>';
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/search/file/${fileId}`, { method: 'POST' });
+    const candidates = await res.json();
+    if (!candidates || candidates.length === 0) {
+      body.innerHTML = '<div class="picker-empty">No results found.</div>';
+      return;
+    }
+    window._pickerCandidates = candidates;
+    body.innerHTML = candidates.map((c, i) => `
+      <div class="picker-row" onclick="window.downloadCandidate(${fileId}, ${i}, this)">
+        <span class="picker-provider">${c.provider}</span>
+        <span class="picker-name" title="${c.name}">${c.name}</span>
+        <span class="picker-downloads">${c.downloads > 0 ? c.downloads.toLocaleString() : '—'}</span>
+        <span class="picker-format">${c.format.toUpperCase()}</span>
+      </div>`).join('');
+  } catch (err) {
+    body.innerHTML = '<div class="picker-empty">Search failed.</div>';
+  }
+};
+
+function setPickerStatus(msg) {
+  const el = document.getElementById('picker-status');
+  if (!el) return;
+  if (!msg) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `<div class="spinner"></div><span>${msg}</span>`;
+}
+
+window.downloadCandidate = async function(fileId, candidateIndex, rowEl) {
+  const token = (window._pickerCandidates || [])[candidateIndex]?.token;
+  if (!token) return;
+  rowEl.classList.add('loading');
+  setPickerStatus('Downloading…');
+  document.getElementById('picker-modal').classList.add('picker-busy');
+  try {
+    const res = await fetch(`/api/download/file/${fileId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const data = await res.json();
+    if (data.downloaded) {
+      window.closePicker();
+      showToast('Subtitle downloaded', 'success');
+      await refreshMediaAndStats();
+    } else {
+      rowEl.classList.remove('loading');
+      setPickerStatus('');
+      document.getElementById('picker-modal').classList.remove('picker-busy');
+      const errMsg = (data.error || 'unknown').slice(0, 120);
+      showToast(`Download failed: ${errMsg}`, 'error');
+    }
+  } catch (err) {
+    rowEl.classList.remove('loading');
+    setPickerStatus('');
+    document.getElementById('picker-modal').classList.remove('picker-busy');
+    showToast('Download failed', 'error');
+  }
+};
+
+window.closePicker = function() {
+  const modal = document.getElementById('picker-modal');
+  if (modal.classList.contains('picker-busy')) return;
+  modal.classList.add('hidden');
+  setPickerStatus('');
+};
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') window.closePicker();
+});
 
 function updateStats(stats) {
   const el = document.getElementById('stats');

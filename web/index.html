@@ -63,6 +63,20 @@
 
 <div id="toast-container"></div>
 
+<div id="picker-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="picker-title">Choose Subtitle</span>
+      <button class="modal-close" onclick="window.closePicker()">✕</button>
+    </div>
+    <div class="picker-cols">
+      <span>Provider</span><span>Release</span><span style="text-align:right">Downloads</span><span>Format</span>
+    </div>
+    <div id="picker-body"></div>
+    <div id="picker-status" class="modal-status" style="display:none"></div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
