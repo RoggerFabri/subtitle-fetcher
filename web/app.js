@@ -8,6 +8,7 @@ window.providerConfigured = {};
 window.providerDefs = [];
 window.isScanning = false;
 window.expandedIds = new Set();
+window.expandedSeasonIds = new Set();
 
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
@@ -247,13 +248,52 @@ function renderMediaBody(m) {
 
   return `
     <div class="media-body">
-      ${seasonsArr.map(s => `
-        <div class="season-row">
-          <span class="season-label">Season ${s.number}</span>
-          <span class="coverage">${s.files.filter(f => f.has_subtitle || f.HasSubtitle).length}/${s.files.length}</span>
-          <button class="btn-fetch" onclick="window.fetchSeason(${id}, ${s.number}, event)">Fetch Season</button>
-        </div>
-      `).join('')}
+      ${seasonsArr.map(s => {
+        const seasonKey = `${id}-${s.number}`;
+        const isSeasonExpanded = window.expandedSeasonIds.has(seasonKey);
+        return `
+          <div class="season-row" onclick="window.toggleSeasonExpand(${id}, ${s.number}, event)">
+            <span class="chevron" style="margin-right:8px; width:12px; display:inline-block">${isSeasonExpanded ? '▾' : '▸'}</span>
+            <span class="season-label">Season ${s.number}</span>
+            <span class="coverage">${s.files.filter(f => f.has_subtitle || f.HasSubtitle).length}/${s.files.length}</span>
+            <button class="btn-fetch" onclick="window.fetchSeason(${id}, ${s.number}, event)">Fetch Season</button>
+          </div>
+          ${isSeasonExpanded ? renderEpisodes(id, s) : ''}
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+window.toggleSeasonExpand = function(mediaId, seasonNum, event) {
+  if (event) event.stopPropagation();
+  const key = `${mediaId}-${seasonNum}`;
+  if (window.expandedSeasonIds.has(key)) {
+    window.expandedSeasonIds.delete(key);
+  } else {
+    window.expandedSeasonIds.add(key);
+  }
+  renderList();
+};
+
+function renderEpisodes(mediaId, season) {
+  return `
+    <div class="episode-list">
+      ${season.files.map(f => {
+        const epNum = f.episode !== undefined ? f.episode : (f.Episode || 0);
+        const name = f.name || f.Name || `Episode ${epNum}`;
+        const hasSub = f.has_subtitle || f.HasSubtitle;
+        const epLabel = epNum > 0 ? `E${epNum.toString().padStart(2, '0')} — ` : '';
+        return `
+          <div class="episode-row">
+            <span class="ep-label">${epLabel}${name}</span>
+            <div class="dot dot-${hasSub ? 'green' : 'red'}"></div>
+            ${!hasSub ? `
+              <button class="fetch-btn" id="fetch-file-${f.id}" onclick="window.fetchFile(${f.id}, event)">Fetch</button>
+            ` : ''}
+          </div>
+        `;
+      }).join('')}
     </div>
   `;
 }
@@ -290,6 +330,33 @@ window.fetchSeason = async function(id, season, event) {
     refreshData();
   } catch (err) {
     showToast("Fetch failed", "error");
+  }
+};
+
+window.fetchFile = async function(id, event) {
+  if (event) event.stopPropagation();
+  const btn = document.getElementById(`fetch-file-${id}`);
+  if (btn) {
+    btn.classList.add('fetching');
+    btn.disabled = true;
+  }
+  showToast("Fetching subtitle...", "info");
+  try {
+    const res = await fetch(`/api/fetch/file/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.downloaded > 0) {
+      showToast("Subtitle downloaded");
+    } else {
+      showToast("No subtitle found", "error");
+    }
+    await refreshMediaAndStats();
+  } catch (err) {
+    showToast("Fetch failed", "error");
+  } finally {
+    if (btn) {
+      btn.classList.remove('fetching');
+      btn.disabled = false;
+    }
   }
 };
 
