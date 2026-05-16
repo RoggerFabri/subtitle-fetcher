@@ -35,11 +35,20 @@ func (p *wyzieProvider) FetchSubtitle(videoPath, show string, keywords []string,
 
 	stem := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
 	season, episode, hasSE := parseSeasonEpisode(stem)
-	if mediaType == "series" && !hasSE {
-		return false
-	}
 
-	results, err := p.search(imdbID, season, episode, mediaType == "series")
+	// For specials/OVA: no reliable S+E or season=0 — search without season/episode constraints.
+	isSpecial := mediaType == "series" && (!hasSE || season == 0)
+
+	var results []map[string]any
+	var err error
+	if isSpecial {
+		results, err = p.search(imdbID, 0, 0, false)
+	} else {
+		if mediaType == "series" && !hasSE {
+			return false
+		}
+		results, err = p.search(imdbID, season, episode, mediaType == "series")
+	}
 
 	lines := []string{}
 	flush := func(ok bool) bool {
@@ -60,7 +69,7 @@ func (p *wyzieProvider) FetchSubtitle(videoPath, show string, keywords []string,
 
 	// Narrow to results that encode the correct episode number, then apply keyword matching.
 	candidates := results
-	if mediaType == "series" && hasSE {
+	if mediaType == "series" && hasSE && !isSpecial {
 		var epMatched []map[string]any
 		for _, r := range results {
 			rel, _ := r["release"].(string)

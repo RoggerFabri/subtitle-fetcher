@@ -65,42 +65,66 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 			})
 		}
 	} else {
-		if !hasSE {
-			return false
-		}
-		if imdbID != "" {
-			label = "imdb+S+E"
-			results, err = p.search(map[string]string{
-				"api_key":        p.apiKey,
-				"languages":      "EN",
-				"type":           "tv",
-				"imdb_id":        "tt" + imdbID,
-				"season_number":  strconv.Itoa(season),
-				"episode_number": strconv.Itoa(episode),
-			})
-		}
-		if len(results) == 0 {
-			label = "show+ep"
-			q := show + " " + epTitle
-			results, err = p.search(map[string]string{
-				"api_key":        p.apiKey,
-				"languages":      "EN",
-				"type":           "tv",
-				"film_name":      q,
-				"season_number":  strconv.Itoa(season),
-				"episode_number": strconv.Itoa(episode),
-			})
-		}
-		if len(results) == 0 {
-			label = "show+S+E"
-			results, err = p.search(map[string]string{
-				"api_key":        p.apiKey,
-				"languages":      "EN",
-				"type":           "tv",
-				"film_name":      show,
-				"season_number":  strconv.Itoa(season),
-				"episode_number": strconv.Itoa(episode),
-			})
+		isSpecial := !hasSE || season == 0
+		if isSpecial {
+			// Specials/OVA: no reliable S+E — search without season/episode constraints.
+			if imdbID != "" {
+				label = "imdb(specials)"
+				results, err = p.search(map[string]string{
+					"api_key":   p.apiKey,
+					"languages": "EN",
+					"type":      "tv",
+					"imdb_id":   "tt" + imdbID,
+				})
+			}
+			if len(results) == 0 {
+				label = "show+ep(specials)"
+				q := show
+				if epTitle != "" {
+					q += " " + epTitle
+				}
+				results, err = p.search(map[string]string{
+					"api_key":   p.apiKey,
+					"languages": "EN",
+					"type":      "tv",
+					"film_name": q,
+				})
+			}
+		} else {
+			if imdbID != "" {
+				label = "imdb+S+E"
+				results, err = p.search(map[string]string{
+					"api_key":        p.apiKey,
+					"languages":      "EN",
+					"type":           "tv",
+					"imdb_id":        "tt" + imdbID,
+					"season_number":  strconv.Itoa(season),
+					"episode_number": strconv.Itoa(episode),
+				})
+			}
+			if len(results) == 0 {
+				label = "show+ep"
+				q := show + " " + epTitle
+				results, err = p.search(map[string]string{
+					"api_key":        p.apiKey,
+					"languages":      "EN",
+					"type":           "tv",
+					"film_name":      q,
+					"season_number":  strconv.Itoa(season),
+					"episode_number": strconv.Itoa(episode),
+				})
+			}
+			if len(results) == 0 {
+				label = "show+S+E"
+				results, err = p.search(map[string]string{
+					"api_key":        p.apiKey,
+					"languages":      "EN",
+					"type":           "tv",
+					"film_name":      show,
+					"season_number":  strconv.Itoa(season),
+					"episode_number": strconv.Itoa(episode),
+				})
+			}
 		}
 	}
 
@@ -124,8 +148,9 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 	}
 
 	// Narrow to results that encode the correct episode number, then apply keyword matching.
+	isSpecial := !hasSE || season == 0
 	candidates := results
-	if hasSE {
+	if hasSE && !isSpecial {
 		var epMatched []map[string]any
 		for _, r := range results {
 			rel, _ := r["release_name"].(string)
