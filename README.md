@@ -4,25 +4,35 @@ Downloads English subtitles for a TV show directory using the [OpenSubtitles RES
 
 ## Requirements
 
-```
-pip install requests
-```
+Go 1.22 or later. No external dependencies — stdlib only.
 
 An OpenSubtitles account and API key are required. Get one at <https://www.opensubtitles.com/consumers>.
+
+## Build
+
+```
+make build
+```
+
+Or directly:
+
+```
+go build -o subtitle-fetcher .
+```
 
 ## Usage
 
 ```
-python get_subtitles.py -u <username> -p <password> -k <api-key> -d <path/to/show> [-w <workers>]
+./subtitle-fetcher -u <username> -p <password> -k <api-key> -d <path/to/show> [-w <workers>]
 ```
 
 | Flag | Description |
 |------|-------------|
-| `-u` / `--username` | OpenSubtitles username |
-| `-p` / `--password` | OpenSubtitles password |
-| `-k` / `--api-key`  | OpenSubtitles API key |
-| `-d` / `--directory`| Directory to scan (searched recursively) |
-| `-w` / `--workers`  | Parallel downloads, default `5` |
+| `-u` | OpenSubtitles username |
+| `-p` | OpenSubtitles password |
+| `-k` | OpenSubtitles API key |
+| `-d` | Directory to scan (searched recursively) |
+| `-w` | Parallel downloads, default `5` |
 
 Video files that already have a subtitle sidecar (`.srt`, `.ass`, `.ssa`, `.sub`) are skipped. A summary report is printed at the end.
 
