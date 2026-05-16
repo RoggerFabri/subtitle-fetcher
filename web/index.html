@@ -11,7 +11,12 @@
 <header>
   <h1>Subtitle Fetcher</h1>
   <div class="header-actions">
-    <span id="scan-status"></span>
+    <div id="scan-progress-container" class="hidden">
+      <span id="scan-status"></span>
+      <div id="scan-progress-bar-bg">
+        <div id="scan-progress-bar-fill"></div>
+      </div>
+    </div>
     <button id="btn-scan" class="primary">⟳ Scan</button>
     <button id="btn-settings-gear">⚙ Settings</button>
   </div>

@@ -54,14 +54,14 @@ func runScan(root string) error {
 }
 
 // runScanWithProgress is used by the web server; progress is reported via statusFn.
-func runScanWithProgress(root string, statusFn func(string)) error {
+func runScanWithProgress(root string, statusFn func(string, int, int)) error { // Modified signature
 	db, err := openDB(root)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	return runScanDB(db, root, func(done, total int, name string) {
-		statusFn(fmt.Sprintf("[%d/%d] %s", done, total, name))
+	return runScanDB(db, root, func(done, total int, name string) { // Modified signature
+		statusFn(fmt.Sprintf("[%d/%d] %s", done, total, name), done, total) // Pass done, total
 	}, func() {}, false)
 }
 
@@ -81,7 +81,7 @@ func runScanDB(db *sql.DB, root string, progressFn func(done, total int, name st
 		workers = 4
 	}
 
-	jobs    := make(chan scanEntry, total)
+	jobs := make(chan scanEntry, total)
 	results := make(chan scanResult, workers)
 
 	var wg sync.WaitGroup

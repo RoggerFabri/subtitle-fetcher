@@ -75,6 +75,7 @@ async function refreshData() {
       fetch('/api/settings')
     ]);
     
+    // Only fetch settings here, media data is handled by refreshMediaAndStats
     if (mediaRes.ok) {
       const data = await mediaRes.json();
       // The server returns a top-level array, not {media: []}
@@ -92,9 +93,47 @@ async function refreshData() {
         else m.status = 'missing';
       });
 
+      const total = window.mediaData.reduce((acc, m) => acc + m.total_count, 0); // This block is now part of refreshMediaAndStats
+      const subbed = window.mediaData.reduce((acc, m) => acc + m.subtitles_count, 0);
+      const stats = {
+        total_files: total,
+        missing: total - subbed,
+        coverage: total > 0 ? Math.round((subbed / total) * 100) : 0
+      };
+      updateStats(stats);
+    }
+    if (settingsRes.ok) {
+      const settings = await settingsRes.json();
+      loadSettings(settings);
+    }
+    await refreshMediaAndStats(); // Call the new helper
+  } catch (err) {
+    console.error(err);
+    showToast("Failed to load initial data from server", "error");
+  }
+}
+
+// New helper function to refresh only media and stats
+async function refreshMediaAndStats() {
+  try {
+    const mediaRes = await fetch('/api/report');
+    if (mediaRes.ok) {
+      const data = await mediaRes.json();
+      window.mediaData = Array.isArray(data) ? data : (data.media || []);
+      
+      window.mediaData.forEach(m => {
+        const files = m.files || m.Files || [];
+        m.subtitles_count = files.filter(f => f.has_subtitle || f.HasSubtitle).length;
+        m.total_count = files.length;
+        
+        if (m.total_count === 0) m.status = 'missing';
+        else if (m.subtitles_count === m.total_count) m.status = 'complete';
+        else if (m.subtitles_count > 0) m.status = 'partial';
+        else m.status = 'missing';
+      });
+
       renderList();
 
-      // Calculate global stats for the dashboard
       const total = window.mediaData.reduce((acc, m) => acc + m.total_count, 0);
       const subbed = window.mediaData.reduce((acc, m) => acc + m.subtitles_count, 0);
       const stats = {
@@ -104,17 +143,11 @@ async function refreshData() {
       };
       updateStats(stats);
     }
-
-    if (settingsRes.ok) {
-      const settings = await settingsRes.json();
-      loadSettings(settings);
-    }
   } catch (err) {
     console.error(err);
-    showToast("Failed to load data from server", "error");
+    showToast("Failed to refresh media data", "error");
   }
 }
-
 window.triggerScan = async function() {
   if (window.isScanning) return;
   
@@ -122,41 +155,51 @@ window.triggerScan = async function() {
   const statusEl = document.getElementById('scan-status');
   
   try {
+    const progressBarContainer = document.getElementById('scan-progress-container');
+    const progressBarFill = document.getElementById('scan-progress-bar-fill');
+
     window.isScanning = true;
     if (btn) btn.disabled = true;
-    if (statusEl) statusEl.textContent = "Initiating scan...";
+    if (progressBarContainer) progressBarContainer.classList.remove('hidden'); // Show progress bar
+    if (statusEl) statusEl.textContent = "Initiating scan..."; // Initial status
+    if (progressBarFill) progressBarFill.style.width = '0%'; // Reset progress bar
 
-    // Start polling for real-time progress
-    let stopPolling = false;
-    const pollStatus = async () => {
-      while (!stopPolling) {
-        try {
-          const sRes = await fetch('/api/scan/status');
-          if (sRes.ok) {
-            const sData = await sRes.json();
-            if (statusEl && sData.status) statusEl.textContent = sData.status;
-            if (!sData.scanning) break;
-          }
-        } catch (e) {}
-        await new Promise(r => setTimeout(r, 500));
-      }
-    };
-
-    const pollPromise = pollStatus();
     const res = await fetch('/api/scan', { method: 'POST' });
-    stopPolling = true;
-    await pollPromise;
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Scan failed to start");
+    }
 
-    if (!res.ok) throw new Error("Scan failed");
-    
+    // Poll for progress until the server reports 'running: false'
+    while (true) {
+      await new Promise(r => setTimeout(r, 1000));
+      const sRes = await fetch('/api/scan/status');
+      if (!sRes.ok) continue;
+
+      const sData = await sRes.json();
+      if (statusEl && sData.status) statusEl.textContent = sData.status; // Update status text
+
+      // Update progress bar
+      if (progressBarFill && sData.total > 0) {
+        const progress = (sData.current / sData.total) * 100;
+        progressBarFill.style.width = `${progress}%`;
+      } else if (progressBarFill) {
+        progressBarFill.style.width = '0%'; // Reset if total is 0
+      }
+      
+      // The Go backend returns 'running', not 'scanning'
+      if (!sData.running) break;
+    }
+
     showToast("Scan completed successfully", "success");
-    await refreshData();
   } catch (err) {
     showToast(err.message, "error");
   } finally {
     window.isScanning = false;
     if (btn) btn.disabled = false;
-    if (statusEl) statusEl.textContent = "";
+    if (progressBarContainer) progressBarContainer.classList.add('hidden'); // Hide progress bar
+    if (statusEl) statusEl.textContent = ""; // Clear final status
+    await refreshMediaAndStats(); // Refresh only the media list and stats
   }
 };
 

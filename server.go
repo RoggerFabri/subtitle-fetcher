@@ -41,6 +41,8 @@ type server struct {
 	scanning     atomic.Bool
 	scanStatus   string
 	scanStatusMu sync.RWMutex
+	scanCurrent  atomic.Int64 // New: current item being scanned
+	scanTotal    atomic.Int64 // New: total items to scan
 
 	listeners   map[chan bool]bool
 	listenersMu sync.Mutex
@@ -170,11 +172,15 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
 	}
 	go func() {
 		defer s.scanning.Store(false)
+		defer s.scanCurrent.Store(0) // Reset on finish
+		defer s.scanTotal.Store(0)   // Reset on finish
 		fmt.Printf("[scan] started  root=%s\n", s.root)
 		start := time.Now()
 		s.setScanStatus("running")
-		if err := runScanWithProgress(s.root, func(status string) {
+		if err := runScanWithProgress(s.root, func(status string, done, total int) { // Modified signature
 			s.setScanStatus(status)
+			s.scanCurrent.Store(int64(done)) // Update current
+			s.scanTotal.Store(int64(total))  // Update total
 			fmt.Printf("\r[scan] %s", status)
 		}); err != nil {
 			fmt.Printf("\n[scan] error: %v\n", err)
@@ -191,6 +197,8 @@ func (s *server) handleScanStatus(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]any{
 		"running": s.scanning.Load(),
 		"status":  s.getScanStatus(),
+		"current": s.scanCurrent.Load(), // New
+		"total":   s.scanTotal.Load(),   // New
 	})
 }
 
