@@ -63,6 +63,21 @@
 
 <div id="toast-container"></div>
 
+<div id="imdb-modal" class="modal-overlay hidden">
+  <div class="modal" style="width:560px">
+    <div class="modal-header">
+      <span id="imdb-modal-title">Set IMDB ID</span>
+      <button class="modal-close" onclick="window.closeImdbPicker()">✕</button>
+    </div>
+    <div style="padding:12px 18px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input id="imdb-search-input" type="text" placeholder="Search title…"
+        style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font-size:13px;outline:none"
+        oninput="window.onImdbSearchInput(this.value)">
+    </div>
+    <div id="imdb-picker-body" style="overflow-y:auto;max-height:55vh"></div>
+  </div>
+</div>
+
 <div id="picker-modal" class="modal-overlay hidden">
   <div class="modal">
     <div class="modal-header">

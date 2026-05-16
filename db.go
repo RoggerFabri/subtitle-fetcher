@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS media (
     path         TEXT    NOT NULL UNIQUE,
     name         TEXT    NOT NULL,
     type         TEXT    NOT NULL CHECK(type IN ('movie','series')),
+    imdb_id      TEXT    NOT NULL DEFAULT '',
     last_scanned TEXT    NOT NULL
 );
 
@@ -60,8 +61,9 @@ func openDB(_ string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
-	// Migration: add subtitle_name for existing DBs (no-op if already present).
+	// Migrations — no-op if column already exists.
 	db.Exec(`ALTER TABLE files ADD COLUMN subtitle_name TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE media ADD COLUMN imdb_id TEXT NOT NULL DEFAULT ''`)
 	return db, nil
 }
 
@@ -84,6 +86,7 @@ func upsertMedia(db *sql.DB, path, name, typ string) (int64, error) {
 		ON CONFLICT(path) DO UPDATE SET
 			name         = excluded.name,
 			last_scanned = excluded.last_scanned`,
+		// imdb_id is intentionally excluded — preserve user-set or auto-discovered value.
 		path, name, typ, now)
 	if err != nil {
 		return 0, err

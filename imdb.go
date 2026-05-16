@@ -8,33 +8,62 @@ import (
 	"time"
 )
 
-// discoverIMDBID looks up the IMDB ID for a title.
-// mediaType should be "movie" or "series".
-func discoverIMDBID(showName, mediaType string) string {
-	query := strings.ToLower(strings.ReplaceAll(showName, " ", "_"))
-	if len(query) == 0 {
-		return ""
-	}
-	first := string([]rune(query)[0])
-	imdbURL := fmt.Sprintf("https://v3.sg.media-imdb.com/suggestion/%s/%s.json", first, query)
+// IMDBSuggestion is one result from the IMDB suggestion API.
+type IMDBSuggestion struct {
+	ID    string `json:"id"`    // numeric, without "tt" prefix
+	Title string `json:"title"`
+	Year  int    `json:"year"`
+	Type  string `json:"type"` // "feature", "tv series", "tv mini series", etc.
+}
 
-	req, _ := http.NewRequest("GET", imdbURL, nil)
+func fetchIMDBSuggestions(query string) ([]IMDBSuggestion, error) {
+	q := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(query), " ", "_"))
+	if q == "" {
+		return nil, nil
+	}
+	first := string([]rune(q)[0])
+	url := fmt.Sprintf("https://v3.sg.media-imdb.com/suggestion/%s/%s.json", first, q)
+
+	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("User-Agent", appName)
 
 	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
 	if err != nil {
-		return ""
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var result struct {
+	var raw struct {
 		D []struct {
 			ID string `json:"id"`
 			L  string `json:"l"`
+			Y  int    `json:"y"`
 			Q  string `json:"q"`
 		} `json:"d"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+
+	out := make([]IMDBSuggestion, 0, len(raw.D))
+	for _, item := range raw.D {
+		if !strings.HasPrefix(item.ID, "tt") {
+			continue // skip people, companies, etc.
+		}
+		out = append(out, IMDBSuggestion{
+			ID:    strings.TrimPrefix(item.ID, "tt"),
+			Title: item.L,
+			Year:  item.Y,
+			Type:  item.Q,
+		})
+	}
+	return out, nil
+}
+
+// discoverIMDBID picks the best-matching IMDB ID for a show/movie name.
+func discoverIMDBID(showName, mediaType string) string {
+	suggestions, err := fetchIMDBSuggestions(showName)
+	if err != nil || len(suggestions) == 0 {
 		return ""
 	}
 
@@ -55,11 +84,11 @@ func discoverIMDBID(showName, mediaType string) string {
 
 	best := ""
 	bestScore := -1
-	for _, item := range result.D {
-		if !accepts(item.Q) {
+	for _, item := range suggestions {
+		if !accepts(item.Type) {
 			continue
 		}
-		title := strings.ToLower(item.L)
+		title := strings.ToLower(item.Title)
 		score := 0
 		for _, kw := range keywords {
 			if strings.Contains(title, kw) {
@@ -68,7 +97,7 @@ func discoverIMDBID(showName, mediaType string) string {
 		}
 		if score > bestScore {
 			bestScore = score
-			best = strings.TrimPrefix(item.ID, "tt")
+			best = item.ID
 		}
 	}
 	return best

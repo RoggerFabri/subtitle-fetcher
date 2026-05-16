@@ -89,6 +89,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/subtitle/{id}", s.handleDeleteSubtitle)
 	mux.HandleFunc("POST /api/search/file/{id}", s.handleSearchFile)
 	mux.HandleFunc("POST /api/download/file/{id}", s.handleDownloadCandidate)
+	mux.HandleFunc("GET /api/imdb/search", s.handleIMDBSearch)
+	mux.HandleFunc("PUT /api/media/{id}/imdb", s.handleSetMediaIMDB)
 	return logMiddleware(mux)
 }
 
@@ -224,14 +226,15 @@ type apiFile struct {
 }
 
 type apiMedia struct {
-	ID    int64     `json:"id"`
-	Name  string    `json:"name"`
-	Type  string    `json:"type"`
-	Files []apiFile `json:"files"`
+	ID     int64     `json:"id"`
+	Name   string    `json:"name"`
+	Type   string    `json:"type"`
+	ImdbID string    `json:"imdb_id,omitempty"`
+	Files  []apiFile `json:"files"`
 }
 
 func (s *server) handleReport(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.db.Query(`SELECT id, name, type FROM media ORDER BY type, name`)
+	rows, err := s.db.Query(`SELECT id, name, type, imdb_id FROM media ORDER BY type, name`)
 	if err != nil {
 		jsonError(w, err.Error(), 500)
 		return
@@ -241,7 +244,7 @@ func (s *server) handleReport(w http.ResponseWriter, r *http.Request) {
 	result := []apiMedia{}
 	for rows.Next() {
 		var m apiMedia
-		if err := rows.Scan(&m.ID, &m.Name, &m.Type); err != nil {
+		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID); err != nil {
 			jsonError(w, err.Error(), 500)
 			return
 		}
@@ -680,7 +683,14 @@ func (s *server) fetchSubtitlesForFiles(files []apiFile, media apiMedia) map[str
 
 	show := showNameFromFolder(media.Name)
 	keywords := buildKeywords(show)
-	imdbID := discoverIMDBID(show, media.Type)
+	imdbID := media.ImdbID
+	if imdbID == "" {
+		imdbID = discoverIMDBID(show, media.Type)
+		if imdbID != "" {
+			s.db.Exec(`UPDATE media SET imdb_id=? WHERE id=?`, imdbID, media.ID)
+			media.ImdbID = imdbID
+		}
+	}
 
 	pending := 0
 	for _, f := range files {
@@ -747,7 +757,7 @@ func (s *server) handleFetchMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var m apiMedia
-	if err := s.db.QueryRow(`SELECT id, name, type FROM media WHERE id=?`, id).Scan(&m.ID, &m.Name, &m.Type); err != nil {
+	if err := s.db.QueryRow(`SELECT id, name, type, imdb_id FROM media WHERE id=?`, id).Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID); err != nil {
 		jsonError(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -767,7 +777,7 @@ func (s *server) handleFetchSeason(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var m apiMedia
-	if err := s.db.QueryRow(`SELECT id, name, type FROM media WHERE id=?`, id).Scan(&m.ID, &m.Name, &m.Type); err != nil {
+	if err := s.db.QueryRow(`SELECT id, name, type, imdb_id FROM media WHERE id=?`, id).Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID); err != nil {
 		jsonError(w, "not found", http.StatusNotFound)
 		return
 	}
@@ -807,7 +817,7 @@ func (s *server) handleFetchFile(w http.ResponseWriter, r *http.Request) {
 	f.Name = baseName(f.Path)
 
 	var m apiMedia
-	s.db.QueryRow(`SELECT id, name, type FROM media WHERE id=?`, mediaID).Scan(&m.ID, &m.Name, &m.Type)
+	s.db.QueryRow(`SELECT id, name, type, imdb_id FROM media WHERE id=?`, mediaID).Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID)
 
 	jsonOK(w, s.fetchSubtitlesForFiles([]apiFile{f}, m))
 }
@@ -850,7 +860,7 @@ func (s *server) handleSearchFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var m apiMedia
-	s.db.QueryRow(`SELECT id, name, type FROM media WHERE id=?`, mediaID).Scan(&m.ID, &m.Name, &m.Type)
+	s.db.QueryRow(`SELECT id, name, type, imdb_id FROM media WHERE id=?`, mediaID).Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID)
 
 	providers, err := loadProviders(s.db)
 	if err != nil || len(providers) == 0 {
@@ -868,7 +878,13 @@ func (s *server) handleSearchFile(w http.ResponseWriter, r *http.Request) {
 
 	show := showNameFromFolder(m.Name)
 	keywords := buildKeywords(show)
-	imdbID := discoverIMDBID(show, m.Type)
+	imdbID := m.ImdbID
+	if imdbID == "" {
+		imdbID = discoverIMDBID(show, m.Type)
+		if imdbID != "" {
+			s.db.Exec(`UPDATE media SET imdb_id=? WHERE id=?`, imdbID, m.ID)
+		}
+	}
 
 	type result struct {
 		candidates []SubtitleCandidate
@@ -958,6 +974,45 @@ func (s *server) handleDownloadCandidate(w http.ResponseWriter, r *http.Request)
 
 	s.db.Exec(`UPDATE files SET has_subtitle=1, subtitle_name=? WHERE id=?`, subName, id)
 	jsonOK(w, map[string]any{"downloaded": true, "subtitle_name": subName})
+}
+
+// --- IMDB ---
+
+func (s *server) handleIMDBSearch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		jsonOK(w, []IMDBSuggestion{})
+		return
+	}
+	results, err := fetchIMDBSuggestions(q)
+	if err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	if results == nil {
+		results = []IMDBSuggestion{}
+	}
+	jsonOK(w, results)
+}
+
+func (s *server) handleSetMediaIMDB(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	var body struct {
+		ImdbID string `json:"imdb_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "bad body", http.StatusBadRequest)
+		return
+	}
+	if _, err := s.db.Exec(`UPDATE media SET imdb_id=? WHERE id=?`, body.ImdbID, id); err != nil {
+		jsonError(w, err.Error(), 500)
+		return
+	}
+	jsonOK(w, map[string]any{"ok": true, "imdb_id": body.ImdbID})
 }
 
 // --- helpers ---

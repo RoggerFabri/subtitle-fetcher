@@ -232,6 +232,10 @@ window.renderList = function() {
     const isExpanded = window.expandedIds.has(id);
     const type = m.type || m.Type;
     const label = type === 'series' ? 'Fetch All' : 'Fetch';
+    const imdbId = m.imdb_id || m.ImdbID || '';
+    const imdbChip = imdbId
+      ? `<a class="imdb-chip" href="https://www.imdb.com/title/tt${imdbId}/" target="_blank" onclick="event.stopPropagation()">IMDb ↗</a>`
+      : `<span class="imdb-chip unset" onclick="window.openImdbPicker(${id}, event)">+ IMDb</span>`;
     return `
     <div class="media-card ${isExpanded ? 'expanded' : ''}">
       <div class="media-header" onclick="window.toggleExpand(${id})">
@@ -239,6 +243,7 @@ window.renderList = function() {
         <span class="media-name">${m.name || m.Name}</span>
         <span class="coverage">${m.subtitles_count}/${m.total_count}</span>
         <div class="dot dot-${getStatusColor(m.status)}"></div>
+        ${imdbChip}
         <button class="fetch-btn" id="fetch-media-${id}" onclick="window.fetchMedia(${id}, event)">${label}</button>
         <span class="chevron">${isExpanded ? '▾' : '▸'}</span>
       </div>
@@ -530,8 +535,86 @@ window.closePicker = function() {
 };
 
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') window.closePicker();
+  if (e.key === 'Escape') {
+    window.closePicker();
+    window.closeImdbPicker();
+  }
 });
+
+// ─── IMDB picker ───
+
+let _imdbSearchTimer = null;
+let _imdbTargetMediaId = null;
+
+window.openImdbPicker = function(mediaId, event) {
+  if (event) event.stopPropagation();
+  _imdbTargetMediaId = mediaId;
+  const m = (window.mediaData || []).find(m => (m.id || m.Id) === mediaId);
+  document.getElementById('imdb-modal-title').textContent =
+    `Set IMDB — ${m ? (m.name || m.Name) : ''}`;
+  const input = document.getElementById('imdb-search-input');
+  input.value = m ? (m.name || m.Name) : '';
+  document.getElementById('imdb-picker-body').innerHTML = '<div class="picker-loading">Searching…</div>';
+  document.getElementById('imdb-modal').classList.remove('hidden');
+  // auto-search with current media name
+  window.onImdbSearchInput(input.value);
+  setTimeout(() => input.select(), 50);
+};
+
+window.closeImdbPicker = function() {
+  document.getElementById('imdb-modal').classList.add('hidden');
+  clearTimeout(_imdbSearchTimer);
+};
+
+window.onImdbSearchInput = function(val) {
+  clearTimeout(_imdbSearchTimer);
+  const body = document.getElementById('imdb-picker-body');
+  if (!val.trim()) { body.innerHTML = ''; return; }
+  _imdbSearchTimer = setTimeout(async () => {
+    body.innerHTML = '<div class="picker-loading">Searching…</div>';
+    try {
+      const res = await fetch(`/api/imdb/search?q=${encodeURIComponent(val.trim())}`);
+      const results = await res.json();
+      if (!results || results.length === 0) {
+        body.innerHTML = '<div class="picker-empty">No results.</div>';
+        return;
+      }
+      body.innerHTML = `
+        <div class="imdb-cols"><span>ID</span><span>Title</span><span style="text-align:right">Year</span><span>Type</span><span></span></div>
+        ${results.map(r => `
+          <div class="imdb-row" onclick="window.selectImdbID(${_imdbTargetMediaId}, '${r.id}', event)">
+            <span class="imdb-row-id">tt${r.id}</span>
+            <span class="imdb-row-title" title="${r.title}">${r.title}</span>
+            <span class="imdb-row-year">${r.year || '—'}</span>
+            <span class="imdb-row-type">${r.type || ''}</span>
+            <a class="imdb-row-link" href="https://www.imdb.com/title/tt${r.id}/" target="_blank" onclick="event.stopPropagation()">↗</a>
+          </div>`).join('')}`;
+    } catch {
+      body.innerHTML = '<div class="picker-empty">Search failed.</div>';
+    }
+  }, 320);
+};
+
+window.selectImdbID = async function(mediaId, imdbId, event) {
+  if (event) event.stopPropagation();
+  try {
+    const res = await fetch(`/api/media/${mediaId}/imdb`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imdb_id: imdbId })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      window.closeImdbPicker();
+      showToast(`IMDB set to tt${imdbId}`, 'success');
+      await refreshMediaAndStats();
+    } else {
+      showToast('Failed to save IMDB ID', 'error');
+    }
+  } catch {
+    showToast('Failed to save IMDB ID', 'error');
+  }
+};
 
 function updateStats(stats) {
   const el = document.getElementById('stats');
