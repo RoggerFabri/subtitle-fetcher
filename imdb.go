@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-func discoverIMDBID(showName string) string {
+// discoverIMDBID looks up the IMDB ID for a title.
+// mediaType should be "movie" or "series".
+func discoverIMDBID(showName, mediaType string) string {
 	query := strings.ToLower(strings.ReplaceAll(showName, " ", "_"))
 	if len(query) == 0 {
 		return ""
@@ -43,11 +45,18 @@ func discoverIMDBID(showName string) string {
 		}
 	}
 
+	accepts := func(q string) bool {
+		q = strings.ToLower(q)
+		if mediaType == "movie" {
+			return q == "feature"
+		}
+		return q == "tv series" || q == "tv mini series"
+	}
+
 	best := ""
 	bestScore := -1
 	for _, item := range result.D {
-		q := strings.ToLower(item.Q)
-		if q != "tv series" && q != "tv mini series" {
+		if !accepts(item.Q) {
 			continue
 		}
 		title := strings.ToLower(item.L)

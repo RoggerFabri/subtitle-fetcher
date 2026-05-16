@@ -7,7 +7,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -44,6 +48,26 @@ func (c *client) do(req *http.Request) (*http.Response, error) {
 	return c.hc.Do(req)
 }
 
+// retryable returns true for status codes that warrant a single retry after a pause.
+func retryable(code int) bool {
+	return code == 429 || code == 503 || code == 502 || code == 504
+}
+
+// withRetry calls doReq, and if the response status is retryable, waits and tries once more.
+func withRetry(label string, doReq func() (*http.Response, error)) (*http.Response, error) {
+	resp, err := doReq()
+	if err != nil {
+		return nil, err
+	}
+	if retryable(resp.StatusCode) {
+		resp.Body.Close()
+		fmt.Printf("  %s — server returned %d, waiting 10s and retrying…\n", label, resp.StatusCode)
+		time.Sleep(10 * time.Second)
+		return doReq()
+	}
+	return resp, nil
+}
+
 func (c *client) login(username, password string) error {
 	payload := map[string]string{"username": username, "password": password}
 
@@ -52,18 +76,9 @@ func (c *client) login(username, password string) error {
 		return c.do(req)
 	}
 
-	resp, err := doReq()
+	resp, err := withRetry("login", doReq)
 	if err != nil {
 		return err
-	}
-	if resp.StatusCode == 429 {
-		resp.Body.Close()
-		fmt.Println("Login rate limited — waiting 10s and retrying...")
-		time.Sleep(10 * time.Second)
-		resp, err = doReq()
-		if err != nil {
-			return err
-		}
 	}
 	defer resp.Body.Close()
 
@@ -105,18 +120,9 @@ func (c *client) search(params map[string]string) ([]map[string]any, error) {
 		return c.do(req)
 	}
 
-	resp, err := doReq()
+	resp, err := withRetry("search", doReq)
 	if err != nil {
 		return nil, err
-	}
-	if resp.StatusCode == 429 {
-		resp.Body.Close()
-		fmt.Println("  Rate limited — waiting 10s and retrying...")
-		time.Sleep(10 * time.Second)
-		resp, err = doReq()
-		if err != nil {
-			return nil, err
-		}
 	}
 	defer resp.Body.Close()
 
@@ -142,18 +148,9 @@ func (c *client) requestDownload(fileID int) (string, error) {
 		return c.do(req)
 	}
 
-	resp, err := doReq()
+	resp, err := withRetry("download", doReq)
 	if err != nil {
 		return "", err
-	}
-	if resp.StatusCode == 429 {
-		resp.Body.Close()
-		fmt.Println("  Download rate limited — waiting 10s and retrying...")
-		time.Sleep(10 * time.Second)
-		resp, err = doReq()
-		if err != nil {
-			return "", err
-		}
 	}
 	defer resp.Body.Close()
 
@@ -169,6 +166,35 @@ func (c *client) requestDownload(fileID int) (string, error) {
 		return "", err
 	}
 	return result.Link, nil
+}
+
+type userInfo struct {
+	UserID             int    `json:"user_id"`
+	Level              string `json:"level"`
+	AllowedDownloads   int    `json:"allowed_downloads"`
+	RemainingDownloads int    `json:"remaining_downloads"`
+	DownloadsCount     int    `json:"downloads_count"`
+	VIP                bool   `json:"vip"`
+}
+
+func (c *client) getUser() (*userInfo, error) {
+	req, _ := http.NewRequest("GET", apiBase+"/infos/user", nil)
+	resp, err := withRetry("user", func() (*http.Response, error) { return c.do(req) })
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("user info failed %d: %s", resp.StatusCode, data)
+	}
+	var result struct {
+		Data userInfo `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result.Data, nil
 }
 
 // --- Response field accessors (encode OpenSubtitles JSON shape) ---
@@ -245,4 +271,197 @@ func matchesShow(sub map[string]any, keywords []string) bool {
 		}
 	}
 	return false
+}
+
+// --- openSubtitlesProvider implements subtitleProvider ---
+
+type openSubtitlesProvider struct {
+	username, password, apiKey string
+	cl                         *client
+}
+
+func newOpenSubtitlesProvider(username, password, apiKey string) *openSubtitlesProvider {
+	return &openSubtitlesProvider{username: username, password: password, apiKey: apiKey}
+}
+
+func (p *openSubtitlesProvider) Name() string { return "opensubtitles" }
+
+func (p *openSubtitlesProvider) Open() error {
+	p.cl = newClient(p.apiKey)
+	return p.cl.login(p.username, p.password)
+}
+
+func (p *openSubtitlesProvider) Close() {
+	if p.cl != nil {
+		p.cl.logout()
+	}
+}
+
+func (p *openSubtitlesProvider) FetchSubtitle(videoPath, show string, keywords []string, imdbID, mediaType string, printMu *sync.Mutex) bool {
+	stem := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
+	season, episode, hasSE := parseSeasonEpisode(stem)
+	epTitle := episodeTitleFromStem(stem)
+	var lines []string
+
+	type strategy struct {
+		label string
+		run   func() ([]map[string]any, error)
+	}
+
+	var strategies []strategy
+
+	if mediaType == "movie" {
+		strategies = []strategy{
+			{
+				label: "imdb_id",
+				run: func() ([]map[string]any, error) {
+					if imdbID == "" {
+						return nil, nil
+					}
+					res, err := p.cl.search(map[string]string{
+						"imdb_id":   imdbID,
+						"languages": "en",
+					})
+					if err != nil {
+						return nil, err
+					}
+					return filterByShow(res, keywords, ""), nil
+				},
+			},
+			{
+				label: "title",
+				run: func() ([]map[string]any, error) {
+					res, err := p.cl.search(map[string]string{
+						"query":     show,
+						"languages": "en",
+					})
+					if err != nil {
+						return nil, err
+					}
+					return filterByShow(res, keywords, ""), nil
+				},
+			},
+		}
+	} else {
+		strategies = []strategy{
+			{
+				label: "imdb+S+E",
+				run: func() ([]map[string]any, error) {
+					if imdbID == "" || !hasSE {
+						return nil, nil
+					}
+					return p.cl.search(map[string]string{
+						"parent_imdb_id": imdbID,
+						"season_number":  strconv.Itoa(season),
+						"episode_number": strconv.Itoa(episode),
+						"languages":      "en",
+					})
+				},
+			},
+			{
+				label: "show+ep",
+				run: func() ([]map[string]any, error) {
+					if !hasSE {
+						return nil, nil
+					}
+					res, err := p.cl.search(map[string]string{
+						"query":          show + " " + epTitle,
+						"languages":      "en",
+						"season_number":  strconv.Itoa(season),
+						"episode_number": strconv.Itoa(episode),
+					})
+					if err != nil {
+						return nil, err
+					}
+					return filterByShow(res, keywords, imdbID), nil
+				},
+			},
+			{
+				label: "show+S+E",
+				run: func() ([]map[string]any, error) {
+					if !hasSE {
+						return nil, nil
+					}
+					res, err := p.cl.search(map[string]string{
+						"query":          show,
+						"languages":      "en",
+						"season_number":  strconv.Itoa(season),
+						"episode_number": strconv.Itoa(episode),
+					})
+					if err != nil {
+						return nil, err
+					}
+					return filterByShow(res, keywords, imdbID), nil
+				},
+			},
+		}
+	}
+
+	var subtitles []map[string]any
+	for _, strat := range strategies {
+		res, err := strat.run()
+		if err != nil {
+			lines = append(lines, fmt.Sprintf("  [%s] error: %v", strat.label, err))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("  [%s] %d result(s)", strat.label, len(res)))
+		if len(res) > 0 {
+			subtitles = res
+			break
+		}
+	}
+
+	flush := func(ok bool) bool {
+		printMu.Lock()
+		fmt.Printf("[opensubtitles] %s\n%s\n", filepath.Base(videoPath), strings.Join(lines, "\n"))
+		printMu.Unlock()
+		return ok
+	}
+
+	if len(subtitles) == 0 {
+		lines = append(lines, "  No subtitles found.")
+		return flush(false)
+	}
+
+	best := subtitles[0]
+	for _, s := range subtitles[1:] {
+		if downloadCount(s) > downloadCount(best) {
+			best = s
+		}
+	}
+	lines = append(lines, fmt.Sprintf("  Selected: %s | downloads: %d", attrString(best, "release"), downloadCount(best)))
+
+	fid, ok := fileID(best)
+	if !ok {
+		lines = append(lines, "  Could not get file ID.")
+		return flush(false)
+	}
+
+	dlLink, err := p.cl.requestDownload(fid)
+	if err != nil {
+		lines = append(lines, fmt.Sprintf("  Download request failed: %v", err))
+		return flush(false)
+	}
+
+	dlResp, err := http.Get(dlLink) //nolint:noctx
+	if err != nil {
+		lines = append(lines, fmt.Sprintf("  Failed to fetch subtitle content: %v", err))
+		return flush(false)
+	}
+	defer dlResp.Body.Close()
+
+	data, err := io.ReadAll(dlResp.Body)
+	if err != nil {
+		lines = append(lines, fmt.Sprintf("  Failed to read subtitle content: %v", err))
+		return flush(false)
+	}
+
+	outPath := strings.TrimSuffix(videoPath, filepath.Ext(videoPath)) + ".srt"
+	if err := os.WriteFile(outPath, data, 0o644); err != nil {
+		lines = append(lines, fmt.Sprintf("  Failed to write subtitle: %v", err))
+		return flush(false)
+	}
+
+	lines = append(lines, fmt.Sprintf("  Saved: %s", filepath.Base(outPath)))
+	return flush(true)
 }

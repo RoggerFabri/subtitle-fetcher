@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subtitle Fetcher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Subtitle Fetcher</h1>
+  <div class="header-actions">
+    <span id="scan-status"></span>
+    <button id="btn-scan" class="primary">⟳ Scan</button>
+    <button id="btn-settings-gear">⚙ Settings</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" id="tab-library">Library</div>
+  <div class="tab" id="tab-settings">Settings</div>
+</div>
+
+<main>
+  <!-- Library tab -->
+  <div id="panel-library">
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <input id="search" type="text" placeholder="Search…">
+      <select id="filter-type">
+        <option value="">All types</option>
+        <option value="movie">Movies</option>
+        <option value="series">Series</option>
+      </select>
+      <select id="filter-status">
+        <option value="">All statuses</option>
+        <option value="complete">Complete</option>
+        <option value="partial">Partial</option>
+        <option value="missing">Missing</option>
+      </select>
+    </div>
+    <div class="media-list" id="media-list"></div>
+  </div>
+
+  <!-- Settings tab -->
+  <div id="panel-settings" class="hidden">
+    <div id="settings-panel">
+      <h2 style="margin:0 0 16px;font-size:15px;">Subtitle Providers</h2>
+      <p style="color:var(--muted);font-size:12px;margin-bottom:20px;">
+        Enabled providers are tried in priority order; first to succeed stops the chain.
+      </p>
+      <div id="provider-list"></div>
+      <button class="primary save-all-btn">Save all</button>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

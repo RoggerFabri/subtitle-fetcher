@@ -21,3 +21,11 @@ env/
 .idea/
 .DS_Store
 Thumbs.db
+/subtitles.db
+
+# Binary
+.exe
+/.playwright-mcp
+/subtitles.db-shm
+/subtitles.db-wal
+/nul

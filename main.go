@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 )
+
 
 func main() {
 	cfg, err := parseConfig()
@@ -15,13 +17,34 @@ func main() {
 		os.Exit(1)
 	}
 
-	cl := newClient(cfg.APIKey)
-	if err := cl.login(cfg.Username, cfg.Password); err != nil {
-		fmt.Fprintf(os.Stderr, "Login failed: %v\n", err)
-		os.Exit(1)
+	if cfg.scanMode() {
+		if err := runScan(cfg.ScanRoot); err != nil {
+			fmt.Fprintf(os.Stderr, "Scan failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
-	fmt.Printf("Logged in as %s\n\n", cfg.Username)
-	defer cl.logout()
+
+	if cfg.serveMode() {
+		db, err := openDB(cfg.ServeRoot)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "DB error: %v\n", err)
+			os.Exit(1)
+		}
+		defer db.Close()
+		srv := newServer(db, cfg.ServeRoot, cfg.Workers)
+		addr := fmt.Sprintf(":%d", cfg.Port)
+		fmt.Printf("Serving at http://localhost%s\n", addr)
+		fmt.Printf("Root:     %s\n", cfg.ServeRoot)
+		exe, _ := os.Executable()
+		fmt.Printf("Database: %s\n", filepath.Join(filepath.Dir(exe), "subtitles.db"))
+		fmt.Printf("Workers:  %d\n\n", cfg.Workers)
+		if err := http.ListenAndServe(addr, srv.routes()); err != nil {
+			fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	videoFiles := collectVideoFiles(cfg.Directory)
 	fmt.Printf("Found %d video file(s)\n", len(videoFiles))
@@ -35,18 +58,22 @@ func main() {
 	}
 	fmt.Printf("Show: %q\n", show)
 
-	parentIMDBID := discoverIMDBID(show)
+	parentIMDBID := discoverIMDBID(show, "series")
 	fmt.Printf("IMDB ID: %s\n\n", parentIMDBID)
 
-	var (
-		printMu    sync.Mutex
-		statsMu    sync.Mutex
-		existing   []string
-		downloaded []string
-		notFound   []string
-		toFetch    []string
-	)
+	prov := newOpenSubtitlesProvider(cfg.Username, cfg.Password, cfg.APIKey)
+	if err := prov.Open(); err != nil {
+		fmt.Fprintf(os.Stderr, "Login failed: %v\n", err)
+		os.Exit(1)
+	}
+	defer prov.Close()
 
+	providers := []subtitleProvider{prov}
+
+	fmt.Printf("Logged in as %s\n\n", cfg.Username)
+
+	toFetch := []string{}
+	existing := []string{}
 	for _, video := range videoFiles {
 		if hasSubtitle(video) {
 			fmt.Printf("[skip] %s\n", filepath.Base(video))
@@ -56,40 +83,36 @@ func main() {
 		}
 	}
 
-	type result struct {
-		path string
-		ok   bool
-	}
+	pending := len(toFetch)
+	fmt.Printf("%d file(s) to fetch\n\n", pending)
 
+	var statsMu sync.Mutex
+	downloaded := []string{}
+	notFound := []string{}
 	sem := make(chan struct{}, cfg.Workers)
-	results := make(chan result, len(toFetch))
-
 	var wg sync.WaitGroup
+
 	for _, video := range toFetch {
 		wg.Add(1)
 		go func(v string) {
 			defer wg.Done()
 			sem <- struct{}{}
-			ok := fetchSubtitle(v, cl, show, keywords, parentIMDBID, &printMu)
-			<-sem
-			results <- result{path: v, ok: ok}
+			defer func() { <-sem }()
+
+			var printMu sync.Mutex
+			ok := fetchWithProviders(v, show, keywords, parentIMDBID, "series", providers, &printMu)
+
+			statsMu.Lock()
+			if ok {
+				downloaded = append(downloaded, v)
+			} else {
+				notFound = append(notFound, v)
+			}
+			statsMu.Unlock()
 		}(video)
 	}
 
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	for r := range results {
-		statsMu.Lock()
-		if r.ok {
-			downloaded = append(downloaded, r.path)
-		} else {
-			notFound = append(notFound, r.path)
-		}
-		statsMu.Unlock()
-	}
+	wg.Wait()
 
 	fmt.Println("\n" + strings.Repeat("=", 60))
 	fmt.Println("  REPORT")
