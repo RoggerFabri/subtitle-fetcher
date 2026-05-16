@@ -168,7 +168,8 @@ window.triggerScan = async function() {
     window.isScanning = false;
     if (btn) btn.disabled = false;
     if (progressBarContainer) progressBarContainer.classList.add('hidden'); // Hide progress bar
-    if (statusEl) statusEl.textContent = ""; // Clear final status
+    if (progressBarFill)   progressBarFill.style.width = '0%';               // Reset bar to empty
+    if (statusEl)         statusEl.textContent = "";                          // Clear scan text
     await refreshMediaAndStats(); // Refresh only the media list and stats
   }
 };
