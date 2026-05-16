@@ -205,7 +205,7 @@ func scanSeriesFS(dir string) ([]fileResult, error) {
 			_, ep, hasSE := parseSeasonEpisode(stem)
 
 			fr := fileResult{path: path, hasSubtitle: hasSubtitle(path)}
-			if seasonNum > 0 {
+			if seasonNum >= 0 {
 				sn := seasonNum
 				fr.season = &sn
 			}
@@ -231,13 +231,18 @@ func writeResultToDB(db *sql.DB, r scanResult) error {
 	return nil
 }
 
+// parseSeasonFromFolder returns the season number for known patterns,
+// 0 for special-season folders (Specials, OVA, …), or -1 if unrecognised.
 func parseSeasonFromFolder(name string) int {
-	m := seasonDirRe.FindStringSubmatch(name)
-	if m == nil {
+	if m := seasonDirRe.FindStringSubmatch(name); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		return n
+	}
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "specials", "special", "ova", "extras", "extra", "bonus", "bonus content":
 		return 0
 	}
-	n, _ := strconv.Atoi(m[1])
-	return n
+	return -1
 }
 
 // --- report ---

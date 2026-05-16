@@ -100,6 +100,8 @@ func upsertFile(db *sql.DB, mediaID int64, path string, season, episode *int, ha
 		INSERT INTO files(media_id, path, season, episode, has_subtitle, last_seen)
 		VALUES(?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
+			season       = excluded.season,
+			episode      = excluded.episode,
 			has_subtitle = excluded.has_subtitle,
 			last_seen    = excluded.last_seen`,
 		mediaID, path, season, episode, sub, now)

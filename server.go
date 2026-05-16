@@ -28,8 +28,9 @@ const (
 	settingSubDLEnabled = "subdl_enabled"
 	settingSubDLApiKey  = "subdl_api_key"
 
-	// Podnapisi keys
-	settingPodEnabled = "podnapisi_enabled"
+	// Wyzie keys
+	settingWyzieEnabled = "wyzie_enabled"
+	settingWyzieApiKey  = "wyzie_api_key"
 )
 
 type server struct {
@@ -282,10 +283,10 @@ func (s *server) handleReport(w http.ResponseWriter, r *http.Request) {
 
 func providerDefaults() map[string]string {
 	return map[string]string{
-		settingProviderOrder: "opensubtitles,subdl,podnapisi",
+		settingProviderOrder: "opensubtitles,subdl,wyzie",
 		settingOSEnabled:     "1",
 		settingSubDLEnabled:  "1",
-		settingPodEnabled:    "1",
+		settingWyzieEnabled:  "1",
 	}
 }
 
@@ -295,6 +296,10 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		if getSetting(s.db, k) == "" {
 			setSetting(s.db, k, defaults[k])
 		}
+	}
+	// Migrate: replace any legacy "podnapisi" entry in the stored order with "wyzie"
+	if order := getSetting(s.db, settingProviderOrder); strings.Contains(order, "podnapisi") {
+		setSetting(s.db, settingProviderOrder, strings.ReplaceAll(order, "podnapisi", "wyzie"))
 	}
 
 	orderStr := getSetting(s.db, "provider_order")
@@ -317,8 +322,8 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 			p["api_key"] = getSetting(s.db, settingOSApiKey)
 		case "subdl":
 			p["api_key"] = getSetting(s.db, settingSubDLApiKey)
-		case "podnapisi":
-			// no credentials
+		case "wyzie":
+			p["api_key"] = getSetting(s.db, settingWyzieApiKey)
 		}
 		providers[name] = p
 	}
@@ -350,7 +355,7 @@ func (s *server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Per-provider sections
-	for _, name := range []string{"opensubtitles", "subdl", "podnapisi"} {
+	for _, name := range []string{"opensubtitles", "subdl", "wyzie"} {
 		enabledKey := name + "_enabled"
 		if raw, ok := body[name]; ok {
 			var sec map[string]any
@@ -376,6 +381,10 @@ func (s *server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 				case "subdl":
 					if v, ok := sec["api_key"].(string); ok && v != "" {
 						setSetting(s.db, settingSubDLApiKey, v)
+					}
+				case "wyzie":
+					if v, ok := sec["api_key"].(string); ok && v != "" {
+						setSetting(s.db, settingWyzieApiKey, v)
 					}
 				}
 			}
@@ -418,8 +427,8 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		case "subdl":
 			k := getSetting(s.db, settingSubDLApiKey)
 			p["configured"] = k != ""
-		case "podnapisi":
-			p["configured"] = true
+		case "wyzie":
+			p["configured"] = getSetting(s.db, settingWyzieApiKey) != ""
 		}
 		providers[name] = p
 	}
@@ -532,17 +541,19 @@ func (s *server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 			"ok":      true,
 			"results": len(res),
 		})
-	case "podnapisi":
-		p := newPodnapisiProvider()
-		res, err := p.search("test", 0, 0, false)
+	case "wyzie":
+		k := getSetting(s.db, settingWyzieApiKey)
+		if k == "" {
+			jsonOK(w, map[string]any{"ok": false, "error": "API key not configured"})
+			return
+		}
+		p := newWyzieProvider(k)
+		res, err := p.search("0816692", 0, 0, false) // Interstellar
 		if err != nil {
 			jsonOK(w, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
-		jsonOK(w, map[string]any{
-			"ok":      true,
-			"results": len(res),
-		})
+		jsonOK(w, map[string]any{"ok": true, "results": len(res)})
 	default:
 		jsonError(w, "unknown provider: "+providerName, http.StatusBadRequest)
 	}
@@ -559,6 +570,10 @@ func loadProviders(db *sql.DB) ([]subtitleProvider, error) {
 	}
 
 	order := getSetting(db, settingProviderOrder)
+	if strings.Contains(order, "podnapisi") {
+		order = strings.ReplaceAll(order, "podnapisi", "wyzie")
+		setSetting(db, settingProviderOrder, order)
+	}
 	if order == "" {
 		order = defaults[settingProviderOrder]
 	}
@@ -584,8 +599,10 @@ func loadProviders(db *sql.DB) ([]subtitleProvider, error) {
 			if k := getSetting(db, settingSubDLApiKey); k != "" {
 				out = append(out, newSubDLProvider(k))
 			}
-		case "podnapisi":
-			out = append(out, newPodnapisiProvider())
+		case "wyzie":
+			if k := getSetting(db, settingWyzieApiKey); k != "" {
+				out = append(out, newWyzieProvider(k))
+			}
 		}
 	}
 	return out, nil

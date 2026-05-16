@@ -11,7 +11,7 @@
 <header>
   <h1>Subtitle Fetcher</h1>
   <div class="header-actions">
-    <div id="scan-progress-container" class="hidden">
+    <div id="scan-progress-container">
       <span id="scan-status"></span>
       <div id="scan-progress-bar-bg">
         <div id="scan-progress-bar-fill"></div>
@@ -42,7 +42,7 @@
         <option value="">All statuses</option>
         <option value="complete">Complete</option>
         <option value="partial">Partial</option>
-        <option value="missing">Missing</option>
+        <option value="missing">Missing / Partial</option>
       </select>
     </div>
     <div class="media-list" id="media-list"></div>
@@ -61,7 +61,7 @@
   </div>
 </main>
 
-<div class="toast" id="toast"></div>
+<div id="toast-container"></div>
 
 <script src="app.js"></script>
 </body>

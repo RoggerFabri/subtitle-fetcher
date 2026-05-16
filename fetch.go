@@ -47,6 +47,16 @@ func extractSRTFromZip(data []byte) ([]byte, error) {
 	return nil, fmt.Errorf("no .srt file in ZIP")
 }
 
+// containsEpisode reports whether a release name encodes the given season+episode.
+// Handles the common S01E01 and 1x01 patterns.
+func containsEpisode(release string, season, episode int) bool {
+	r := strings.ToLower(release)
+	if strings.Contains(r, fmt.Sprintf("s%02de%02d", season, episode)) {
+		return true
+	}
+	return strings.Contains(r, fmt.Sprintf("%dx%02d", season, episode))
+}
+
 // matchesKeywords reports whether text contains any of the given keywords (case-insensitive).
 func matchesKeywords(text string, keywords []string) bool {
 	t := strings.ToLower(text)

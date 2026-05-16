@@ -123,9 +123,25 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 		return flush(false)
 	}
 
-	// Pick first keyword-matching result
-	best := results[0]
-	for _, r := range results {
+	// Narrow to results that encode the correct episode number, then apply keyword matching.
+	candidates := results
+	if hasSE {
+		var epMatched []map[string]any
+		for _, r := range results {
+			rel, _ := r["release_name"].(string)
+			if rel == "" {
+				rel, _ = r["name"].(string)
+			}
+			if containsEpisode(rel, season, episode) {
+				epMatched = append(epMatched, r)
+			}
+		}
+		if len(epMatched) > 0 {
+			candidates = epMatched
+		}
+	}
+	best := candidates[0]
+	for _, r := range candidates {
 		rel, _ := r["release_name"].(string)
 		if rel == "" {
 			rel, _ = r["name"].(string)
@@ -171,12 +187,15 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 		lines = append(lines, fmt.Sprintf("\n  Read failed: %v", err))
 		return flush(false)
 	}
+	lines = append(lines, fmt.Sprintf("\n  ZIP bytes: %d (Content-Length: %d, Encoding: %q)",
+		len(data), resp.ContentLength, resp.Header.Get("Content-Encoding")))
 
 	srt, err := extractSRTFromZip(data)
 	if err != nil {
 		lines = append(lines, fmt.Sprintf("\n  SRT extract failed: %v", err))
 		return flush(false)
 	}
+	lines = append(lines, fmt.Sprintf("\n  SRT bytes: %d", len(srt)))
 
 	outPath := strings.TrimSuffix(videoPath, filepath.Ext(videoPath)) + ".srt"
 	if err := os.WriteFile(outPath, srt, 0o644); err != nil {
