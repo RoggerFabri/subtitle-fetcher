@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('filter-type')?.addEventListener('change', renderList);
   document.getElementById('filter-status')?.addEventListener('change', renderList);
-  document.querySelector('.save-all-btn')?.addEventListener('click', saveAllProviders);
+  document.querySelector('.save-all-btn')?.addEventListener('click', () => window.saveAllProviders());
 
   // Set initial view state
   showTab('library');
@@ -425,7 +425,7 @@ function renderSettings() {
           <div class="provider-actions">
             <button class="btn-sm btn-test" onclick="window.testProvider('${name}')">Test</button>
             <label class="provider-toggle-label">
-              <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.providerEnabled['${name}'] = this.checked">
+              <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.providerEnabled['${name}'] = this.checked; window.saveAllProviders();">
             </label>
           </div>
         </div>
@@ -440,7 +440,7 @@ function renderSettings() {
 /**
  * Persists all provider settings to the backend
  */
-async function saveAllProviders() {
+window.saveAllProviders = async function() {
   const payload = { provider_order: window.providerOrder };
   window.providerOrder.forEach(name => {
     payload[name] = { 
