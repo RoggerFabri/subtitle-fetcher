@@ -131,7 +131,9 @@ document.addEventListener('keydown', function(e) {
     window.app.closePicker();
     window.app.closeImdbPicker();
   }
-  if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+  const modalOpen = !document.getElementById('picker-modal')?.classList.contains('hidden') ||
+                    !document.getElementById('imdb-modal')?.classList.contains('hidden');
+  if (e.key === '/' && !modalOpen && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
     e.preventDefault();
     document.getElementById('search')?.focus();
   }
