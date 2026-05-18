@@ -35,7 +35,7 @@ export function renderSettings() {
         <label>Parallel workers</label>
         <input type="number" min="1" max="50" value="${state.workers}"
           style="width:70px"
-          oninput="window.app.state.workers = Math.max(1, Math.min(50, parseInt(this.value)||1)); window.app.saveAllProviders();">
+          onchange="window.app.state.workers = Math.max(1, Math.min(50, parseInt(this.value)||1)); this.value = window.app.state.workers; window.app.saveAllProviders();">
       </div>
     </div>
   `;
