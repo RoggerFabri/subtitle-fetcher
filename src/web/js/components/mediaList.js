@@ -251,6 +251,7 @@ export function renderEpisodes(mediaId, season) {
           ${hasSub && subName ? `
             <div class="subtitle-row">
               <span class="subtitle-filename">${subName}</span>
+              <button class="subtitle-prev-btn" onclick="window.app.openSubtitlePreview(${f.id}, '${subName.replace(/'/g, "\\'")}', event)">Preview</button>
               <button class="subtitle-del-btn" onclick="window.app.deleteSubtitle(${f.id}, event)">Delete</button>
             </div>
           ` : ''}

@@ -31,4 +31,3 @@
 ## Low priority / future
 
 - [ ] **Subtitle language tag** — display the detected language of the downloaded subtitle on the subtitle row (parseable from filename or provider metadata).
-- [ ] **Miniplayer** — in-browser video + subtitle preview. Straightforward for MP4/WebM; requires FFmpeg transcoding to support MKV (the most common format in mixed libraries). Deferred until transcoding support is scoped.
