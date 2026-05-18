@@ -151,6 +151,7 @@ export async function fetchMedia(id, event) {
     const type = data.downloaded > 0 ? 'success' : 'error';
     showToast(`${prefix}${data.downloaded} downloaded, ${data.failed} failed`, type);
     state.fileCache.delete(id);
+    if (data.downloaded > 0) state.expandedIds.add(id);
     await refreshMediaAndStats();
     if (data.downloaded > 0) flashCard(id);
   } catch (err) {
@@ -176,6 +177,10 @@ export async function fetchSeason(id, season, event) {
     const type = data.downloaded > 0 ? 'success' : 'error';
     showToast(`${prefix}${data.downloaded} downloaded, ${data.failed} failed`, type);
     state.fileCache.delete(id);
+    if (data.downloaded > 0) {
+      state.expandedIds.add(id);
+      state.expandedSeasonIds.add(`${id}-${season}`);
+    }
     await refreshMediaAndStats();
     if (data.downloaded > 0) flashCard(id);
   } catch (err) {
