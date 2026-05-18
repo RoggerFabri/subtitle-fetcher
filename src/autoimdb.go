@@ -113,7 +113,7 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 			autoIMDB.mu.Unlock()
 		}()
 
-		rows, err := db.Query(`SELECT id, name, type FROM media WHERE imdb_id = '' OR imdb_id IS NULL`)
+		rows, err := db.Query(`SELECT id, name, type FROM media WHERE (imdb_id = '' OR imdb_id IS NULL) AND EXISTS (SELECT 1 FROM files WHERE media_id = media.id)`)
 		if err != nil {
 			return
 		}
