@@ -397,10 +397,6 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 			setSetting(s.db, k, defaults[k])
 		}
 	}
-	// Migrate: replace any legacy "podnapisi" entry in the stored order with "wyzie"
-	if order := getSetting(s.db, settingProviderOrder); strings.Contains(order, "podnapisi") {
-		setSetting(s.db, settingProviderOrder, strings.ReplaceAll(order, "podnapisi", "wyzie"))
-	}
 
 	orderStr := getSetting(s.db, "provider_order")
 	if orderStr == "" {
@@ -779,10 +775,6 @@ func (s *server) loadProviders() ([]subtitleProvider, error) {
 	}
 
 	order := getSetting(s.db, settingProviderOrder)
-	if strings.Contains(order, "podnapisi") {
-		order = strings.ReplaceAll(order, "podnapisi", "wyzie")
-		setSetting(s.db, settingProviderOrder, order)
-	}
 	if order == "" {
 		order = defaults[settingProviderOrder]
 	}
