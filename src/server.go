@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -44,20 +45,26 @@ type server struct {
 	scanning     atomic.Bool
 	scanStatus   string
 	scanStatusMu sync.RWMutex
-	scanCurrent  atomic.Int64 // New: current item being scanned
-	scanTotal    atomic.Int64 // New: total items to scan
+	scanCurrent  atomic.Int64
+	scanTotal    atomic.Int64
 
 	listeners   map[chan bool]bool
 	listenersMu sync.Mutex
 
 	watcher *mediaWatcher
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func newServer(db *sql.DB, root string, workers int) *server {
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &server{
 		db:        db,
 		root:      root,
 		listeners: make(map[chan bool]bool),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 	// Seed defaults so settings are available before the first HTTP request.
 	for k, v := range providerDefaults() {
@@ -86,6 +93,7 @@ func newServer(db *sql.DB, root string, workers int) *server {
 }
 
 func (s *server) Shutdown() {
+	s.cancel()
 	if s.watcher != nil {
 		s.watcher.Stop()
 	}
@@ -132,6 +140,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/download/file/{id}", s.handleDownloadCandidate)
 	mux.HandleFunc("GET /api/imdb/search", s.handleIMDBSearch)
 	mux.HandleFunc("POST /api/imdb/auto", s.handleAutoIMDB)
+	mux.HandleFunc("GET /api/imdb/auto/status", s.handleAutoIMDBStatus)
 	mux.HandleFunc("PUT /api/media/{id}/imdb", s.handleSetMediaIMDB)
 	return logMiddleware(mux)
 }
@@ -236,7 +245,7 @@ func (s *server) handleScan(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		s.setScanStatus("running")
 		var lastLog time.Time
-		if err := runScanWithProgress(s.root, func(status string, done, total int) {
+		if err := runScanWithProgress(s.ctx, s.root, func(status string, done, total int) {
 			s.setScanStatus(status)
 			s.scanCurrent.Store(int64(done))
 			s.scanTotal.Store(int64(total))
@@ -1158,12 +1167,16 @@ func (s *server) handleIMDBSearch(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleAutoIMDB(w http.ResponseWriter, r *http.Request) {
-	result, err := autoPopulateIMDB(s.db)
-	if err != nil {
+	if err := autoPopulateIMDB(s.ctx, s.db); err != nil {
 		jsonError(w, err.Error(), http.StatusConflict)
 		return
 	}
-	jsonOK(w, result)
+	jsonOK(w, map[string]string{"status": "started"})
+}
+
+func (s *server) handleAutoIMDBStatus(w http.ResponseWriter, r *http.Request) {
+	snap := autoIMDB.snapshot()
+	jsonOK(w, snap)
 }
 
 func (s *server) handleSetMediaIMDB(w http.ResponseWriter, r *http.Request) {

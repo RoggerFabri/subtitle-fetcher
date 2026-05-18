@@ -229,16 +229,39 @@ export async function deleteSubtitle(id, event) {
 
 export async function autoIMDB() {
   const btn = document.getElementById('btn-auto-imdb');
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
   try {
-    const data = await api.apiAutoIMDB();
-    showToast(`Auto IMDB: ${data.matched} matched, ${data.skipped} skipped`, data.matched > 0 ? 'success' : 'info');
-    if (data.matched > 0) await refreshMediaAndStats();
+    await api.apiAutoIMDB();
   } catch (err) {
     showToast(err.message, 'error');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Auto IMDB'; }
+    return;
   }
+
+  if (btn) btn.disabled = true;
+
+  let lastMatched = 0;
+  while (true) {
+    await new Promise(r => setTimeout(r, 1000));
+    let s;
+    try { s = await api.apiAutoIMDBStatus(); } catch { continue; }
+
+    if (btn) {
+      btn.textContent = s.total > 0 ? `${s.current} / ${s.total}` : '…';
+      btn.title = s.label || '';
+    }
+
+    if (lastMatched !== s.matched) {
+      lastMatched = s.matched;
+      refreshMediaAndStats();
+    }
+
+    if (!s.running) {
+      showToast(`Auto IMDB: ${s.matched} matched, ${s.skipped} skipped`, s.matched > 0 ? 'success' : 'info');
+      await refreshMediaAndStats();
+      break;
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Auto IMDB'; btn.title = ''; }
 }
 
 export function mediaNameById(id) {

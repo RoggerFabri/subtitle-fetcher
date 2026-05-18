@@ -78,6 +78,12 @@ export async function apiAutoIMDB() {
   return res.json();
 }
 
+export async function apiAutoIMDBStatus() {
+  const res = await fetch('/api/imdb/auto/status');
+  if (!res.ok) throw new Error('Failed to get status');
+  return res.json();
+}
+
 export async function apiImdbSearch(val) {
   const res = await fetch(`/api/imdb/search?q=${encodeURIComponent(val)}`);
   if (!res.ok) throw new Error("Search failed");

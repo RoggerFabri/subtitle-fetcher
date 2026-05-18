@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -49,24 +50,24 @@ func runScan(root string) error {
 	digits := func(total int) string { return strconv.Itoa(total) }
 	_ = digits
 
-	return runScanDB(db, root, func(done, total int, name string) {
+	return runScanDB(context.Background(), db, root, func(done, total int, name string) {
 		fmt.Printf("\r  [%*d/%d] %-55s", len(strconv.Itoa(total)), done, total, truncate(name, 55))
 	}, func() { fmt.Println() }, true)
 }
 
 // runScanWithProgress is used by the web server; progress is reported via statusFn.
-func runScanWithProgress(root string, statusFn func(string, int, int)) error { // Modified signature
+func runScanWithProgress(ctx context.Context, root string, statusFn func(string, int, int)) error {
 	db, err := openDB(root)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	return runScanDB(db, root, func(done, total int, name string) { // Modified signature
-		statusFn(fmt.Sprintf("[%d/%d] %s", done, total, name), done, total) // Pass done, total
+	return runScanDB(ctx, db, root, func(done, total int, name string) {
+		statusFn(fmt.Sprintf("[%d/%d] %s", done, total, name), done, total)
 	}, func() {}, false)
 }
 
-func runScanDB(db *sql.DB, root string, progressFn func(done, total int, name string), doneFn func(), printReport bool) error {
+func runScanDB(ctx context.Context, db *sql.DB, root string, progressFn func(done, total int, name string), doneFn func(), printReport bool) error {
 	entries := collectEntries(
 		filepath.Join(root, "Movies"),
 		filepath.Join(root, "Series"),
@@ -108,6 +109,9 @@ func runScanDB(db *sql.DB, root string, progressFn func(done, total int, name st
 
 	done := 0
 	for r := range results {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		done++
 		progressFn(done, total, r.entry.name)
 		if r.scanErr != nil {
