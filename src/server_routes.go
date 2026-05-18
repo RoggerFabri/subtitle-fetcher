@@ -47,6 +47,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/fetch/media/{id}", s.handleFetchMedia)
 	mux.HandleFunc("POST /api/fetch/season/{id}/{season}", s.handleFetchSeason)
 	mux.HandleFunc("POST /api/fetch/file/{id}", s.handleFetchFile)
+	mux.HandleFunc("GET /api/subtitle/{id}/preview", s.handleSubtitlePreview)
 	mux.HandleFunc("DELETE /api/subtitle/{id}", s.handleDeleteSubtitle)
 	mux.HandleFunc("POST /api/search/file/{id}", s.handleSearchFile)
 	mux.HandleFunc("POST /api/download/file/{id}", s.handleDownloadCandidate)

@@ -189,6 +189,24 @@ export function onImdbSearchInput(val) {
   }, 320);
 }
 
+export async function openSubtitlePreview(fileId, subName, event) {
+  if (event) event.stopPropagation();
+  const modal = document.getElementById('preview-modal');
+  document.getElementById('preview-modal-title').textContent = subName || 'Subtitle Preview';
+  const body = document.getElementById('preview-body');
+  body.textContent = 'Loading…';
+  modal.classList.remove('hidden');
+  try {
+    body.textContent = await api.apiSubtitlePreview(fileId);
+  } catch {
+    body.textContent = 'Failed to load subtitle.';
+  }
+}
+
+export function closeSubtitlePreview() {
+  document.getElementById('preview-modal').classList.add('hidden');
+}
+
 export async function selectImdbID(mediaId, imdbId, event) {
   if (event) event.stopPropagation();
   try {

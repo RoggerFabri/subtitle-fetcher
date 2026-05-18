@@ -131,6 +131,12 @@ export async function apiImport(json) {
   return data;
 }
 
+export async function apiSubtitlePreview(fileId) {
+  const res = await fetch(`/api/subtitle/${fileId}/preview`);
+  if (!res.ok) throw new Error('Failed to load subtitle');
+  return res.text();
+}
+
 export async function apiTestProvider(name) {
   const res = await fetch(`/api/health/provider-test?provider=${name}`, { method: 'POST' });
   if (!res.ok) {

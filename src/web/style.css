@@ -440,6 +440,13 @@ main { padding: 24px; }
 .picker-busy .modal-close { opacity: .3; cursor: not-allowed; pointer-events: none; }
 .picker-busy #picker-body { pointer-events: none; }
 
+.modal--preview { width: min(720px, 92vw); }
+.preview-body {
+  margin: 0; padding: 16px 20px; overflow-y: auto; max-height: 70vh;
+  font-family: 'Consolas', 'Courier New', monospace; font-size: 12px;
+  line-height: 1.7; color: var(--text); white-space: pre-wrap; word-break: break-word;
+}
+
 .modal-status {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 18px; border-top: 1px solid var(--border);
@@ -479,6 +486,9 @@ main { padding: 24px; }
 .subtitle-filename {
   flex: 1; font-size: 11px; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.subtitle-prev-btn {
+  font-size: 11px; padding: 2px 8px; flex-shrink: 0; color: var(--muted);
 }
 .subtitle-del-btn {
   font-size: 11px; padding: 2px 8px; flex-shrink: 0;

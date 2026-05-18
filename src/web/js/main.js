@@ -125,11 +125,15 @@ document.getElementById('picker-modal')?.addEventListener('click', e => {
 document.getElementById('imdb-modal')?.addEventListener('click', e => {
   if (e.target === e.currentTarget) window.app.closeImdbPicker();
 });
+document.getElementById('preview-modal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) window.app.closeSubtitlePreview();
+});
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     window.app.closePicker();
     window.app.closeImdbPicker();
+    window.app.closeSubtitlePreview();
   }
   window.app.handlePickerKey(e);
   window.app.handleImdbKey(e);

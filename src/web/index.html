@@ -129,6 +129,15 @@
     <div id="picker-status" class="modal-status" style="display:none"></div>
   </div>
 </div>
+<div id="preview-modal" class="modal-overlay hidden">
+  <div class="modal modal--preview">
+    <div class="modal-header">
+      <span id="preview-modal-title">Subtitle Preview</span>
+      <button class="modal-close" onclick="window.app.closeSubtitlePreview()">✕</button>
+    </div>
+    <pre id="preview-body" class="preview-body"></pre>
+  </div>
+</div>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

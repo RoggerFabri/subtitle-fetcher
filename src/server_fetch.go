@@ -196,6 +196,31 @@ func (s *server) handleFetchFile(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, s.fetchSubtitlesForFiles([]apiFile{f}, m))
 }
 
+func (s *server) handleSubtitlePreview(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		jsonError(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	var path string
+	if err := s.db.QueryRow(`SELECT path FROM files WHERE id=?`, id).Scan(&path); err != nil {
+		jsonError(w, "not found", http.StatusNotFound)
+		return
+	}
+	sp := subtitlePath(path)
+	if sp == "" {
+		jsonError(w, "no subtitle on disk", http.StatusNotFound)
+		return
+	}
+	data, err := os.ReadFile(sp)
+	if err != nil {
+		jsonError(w, "read failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write(data)
+}
+
 func (s *server) handleDeleteSubtitle(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
