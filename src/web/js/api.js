@@ -69,6 +69,15 @@ export async function apiDownloadFile(fileId, token) {
   return res.json();
 }
 
+export async function apiAutoIMDB() {
+  const res = await fetch('/api/imdb/auto', { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Auto IMDB failed');
+  }
+  return res.json();
+}
+
 export async function apiImdbSearch(val) {
   const res = await fetch(`/api/imdb/search?q=${encodeURIComponent(val)}`);
   if (!res.ok) throw new Error("Search failed");

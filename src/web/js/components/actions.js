@@ -227,6 +227,20 @@ export async function deleteSubtitle(id, event) {
   }
 }
 
+export async function autoIMDB() {
+  const btn = document.getElementById('btn-auto-imdb');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const data = await api.apiAutoIMDB();
+    showToast(`Auto IMDB: ${data.matched} matched, ${data.skipped} skipped`, data.matched > 0 ? 'success' : 'info');
+    if (data.matched > 0) await refreshMediaAndStats();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Auto IMDB'; }
+  }
+}
+
 export function mediaNameById(id) {
   const m = (state.mediaData || []).find(m => (m.id || m.Id) === id);
   return m ? (m.name || m.Name || null) : null;

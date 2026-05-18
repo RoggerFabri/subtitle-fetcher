@@ -131,6 +131,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/search/file/{id}", s.handleSearchFile)
 	mux.HandleFunc("POST /api/download/file/{id}", s.handleDownloadCandidate)
 	mux.HandleFunc("GET /api/imdb/search", s.handleIMDBSearch)
+	mux.HandleFunc("POST /api/imdb/auto", s.handleAutoIMDB)
 	mux.HandleFunc("PUT /api/media/{id}/imdb", s.handleSetMediaIMDB)
 	return logMiddleware(mux)
 }
@@ -1154,6 +1155,15 @@ func (s *server) handleIMDBSearch(w http.ResponseWriter, r *http.Request) {
 		results = []IMDBSuggestion{}
 	}
 	jsonOK(w, results)
+}
+
+func (s *server) handleAutoIMDB(w http.ResponseWriter, r *http.Request) {
+	result, err := autoPopulateIMDB(s.db)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusConflict)
+		return
+	}
+	jsonOK(w, result)
 }
 
 func (s *server) handleSetMediaIMDB(w http.ResponseWriter, r *http.Request) {
