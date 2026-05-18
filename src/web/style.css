@@ -51,8 +51,8 @@ main { padding: 24px; }
 .coverage-bar-track { height: 4px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
 .coverage-bar-fill { height: 100%; border-radius: 2px; transition: width .4s ease; }
 
-.toolbar { display: flex; gap: 10px; margin-bottom: 16px; }
-.search-wrap { flex: 1; position: relative; display: flex; }
+.toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.search-wrap { position: relative; display: flex; }
 .search-wrap input {
   flex: 1; background: var(--surface); border: 1px solid var(--border);
   color: var(--text); padding: 7px 32px 7px 12px; border-radius: 6px; font-size: 13px; outline: none;
@@ -63,10 +63,18 @@ main { padding: 24px; }
   background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 2px 4px;
 }
 .search-clear:hover { color: var(--text); }
-.toolbar select {
-  background: var(--surface); border: 1px solid var(--border); color: var(--text);
-  padding: 7px 10px; border-radius: 6px; font-size: 13px; outline: none;
+
+.filter-groups { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.pills { display: flex; gap: 4px; }
+.pill {
+  font-size: 12px; padding: 3px 10px; border-radius: 20px;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s; line-height: 1.5;
 }
+.pill:hover { border-color: #3d4056; color: var(--text); background: var(--surface); }
+.pill.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 
 .media-list { display: flex; flex-direction: column; gap: 8px; }
 

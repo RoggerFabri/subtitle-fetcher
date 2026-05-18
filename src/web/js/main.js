@@ -57,8 +57,15 @@ document.addEventListener('DOMContentLoaded', () => {
     searchEl.focus();
   });
   
-  document.getElementById('filter-type')?.addEventListener('change', window.app.renderList);
-  document.getElementById('filter-status')?.addEventListener('change', window.app.renderList);
+  document.querySelectorAll('.pills').forEach(group => {
+    group.addEventListener('click', e => {
+      const pill = e.target.closest('.pill');
+      if (!pill) return;
+      group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      window.app.renderList();
+    });
+  });
   document.querySelector('.save-all-btn')?.addEventListener('click', () => window.app.saveAllProviders());
   document.getElementById('btn-export')?.addEventListener('click', () => window.app.exportSettings());
   document.getElementById('import-file-input')?.addEventListener('change', e => {

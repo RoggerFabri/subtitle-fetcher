@@ -42,20 +42,25 @@ export function renderList() {
   if (!container) return;
 
   const query = document.getElementById('search')?.value.toLowerCase() || "";
-  const typeFilter = document.getElementById('filter-type')?.value || "";
-  const statusFilter = document.getElementById('filter-status')?.value || "";
+  const typeFilter = document.querySelector('.pills[data-filter="type"] .pill.active')?.dataset.value || "";
+  const statusFilter = document.querySelector('.pills[data-filter="status"] .pill.active')?.dataset.value || "";
+  const imdbFilter = document.querySelector('.pills[data-filter="imdb"] .pill.active')?.dataset.value || "";
 
   const filtered = (state.mediaData || []).filter(m => {
     if (m.total_count === 0) return false;
     const name = m.name || m.Name || "";
     const type = m.type || m.Type || "";
     const status = m.status || m.Status || "";
+    const imdbId = m.imdb_id || m.ImdbID || "";
     const matchesSearch = name.toLowerCase().includes(query);
     const matchesType = !typeFilter || type === typeFilter;
     const matchesStatus = !statusFilter ||
       status === statusFilter ||
       (statusFilter === 'missing' && status === 'partial');
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesImdb = !imdbFilter ||
+      (imdbFilter === 'yes' && imdbId) ||
+      (imdbFilter === 'no' && !imdbId);
+    return matchesSearch && matchesType && matchesStatus && matchesImdb;
   });
 
   if (filtered.length === 0) {

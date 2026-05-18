@@ -31,17 +31,33 @@
         <input id="search" type="text" placeholder="Search…">
         <button id="search-clear" class="search-clear hidden">✕</button>
       </div>
-      <select id="filter-type">
-        <option value="">All types</option>
-        <option value="movie">Movies</option>
-        <option value="series">Series</option>
-      </select>
-      <select id="filter-status">
-        <option value="">All statuses</option>
-        <option value="complete">Complete</option>
-        <option value="partial">Partial</option>
-        <option value="missing">Missing / Partial</option>
-      </select>
+      <div class="filter-groups">
+        <div class="filter-group">
+          <span class="filter-label">Type</span>
+          <div class="pills" data-filter="type">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill" data-value="movie">Movies</button>
+            <button class="pill" data-value="series">Series</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">Status</span>
+          <div class="pills" data-filter="status">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill" data-value="complete">Complete</button>
+            <button class="pill" data-value="partial">Partial</button>
+            <button class="pill" data-value="missing">Missing</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label">IMDB</span>
+          <div class="pills" data-filter="imdb">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill" data-value="yes">With IMDB</button>
+            <button class="pill" data-value="no">No IMDB</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="media-list" id="media-list"></div>
   </div>
