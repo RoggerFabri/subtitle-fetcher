@@ -10,7 +10,7 @@
 
 - [x] **Sort options** — list order is DB insertion order. Add sort by name (A–Z), coverage %, and type via a dropdown in the toolbar.
 - [x] **Delete subtitle confirmation** — delete fires immediately with no undo. Add an inline confirmation or grace period to prevent accidental loss.
-- [ ] **Empty library state** — fresh installs show "No media items found." which is confusing. Replace with a proper empty state and a "Run a scan to get started" CTA.
+- [x] **Empty library state** — fresh installs show "No media items found." which is confusing. Replace with a proper empty state and a "Run a scan to get started" CTA.
 - [x] **Fetch button spinner** — buttons disable during fetch but show no loading indicator. Add a spinner or label change for clearer feedback.
 - [x] **Auto-expand after fetch** — after a successful fetch, expand the card so the user sees the result without an extra click.
 - [ ] **Expand / collapse all** — add a toggle-all button next to the search bar for navigating large libraries faster.

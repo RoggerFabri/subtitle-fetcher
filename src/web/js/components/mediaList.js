@@ -101,7 +101,19 @@ export function renderList() {
   }
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div style="padding: 20px; color: var(--muted); text-align: center;">No media items found.</div>';
+    const hasData = (state.mediaData || []).some(m => m.total_count > 0);
+    const hasFilters = query || typeFilter || statusFilter || imdbFilter;
+    if (!hasData) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📂</div>
+          <div class="empty-state-title">Your library is empty</div>
+          <div class="empty-state-body">Point the app at your media folder and run a scan to get started.</div>
+          <button class="empty-state-btn" onclick="window.app.triggerScan()">⟳ Run a scan</button>
+        </div>`;
+    } else {
+      container.innerHTML = `<div class="empty-state empty-state--filters"><div class="empty-state-title">No results</div><div class="empty-state-body">${hasFilters ? 'No media matches the current filters.' : 'Nothing to show.'}</div></div>`;
+    }
     return;
   }
 
