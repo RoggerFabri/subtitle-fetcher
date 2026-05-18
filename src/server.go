@@ -59,6 +59,12 @@ func newServer(db *sql.DB, root string, workers int) *server {
 		root:      root,
 		listeners: make(map[chan bool]bool),
 	}
+	// Seed defaults so settings are available before the first HTTP request.
+	for k, v := range providerDefaults() {
+		if getSetting(db, k) == "" {
+			setSetting(db, k, v)
+		}
+	}
 	// DB-stored value takes precedence over the CLI flag.
 	if stored := getSetting(db, settingWorkers); stored != "" {
 		if n, err := strconv.Atoi(stored); err == nil && n >= 1 && n <= 50 {

@@ -46,7 +46,7 @@ func main() {
 			dbDir = env
 		}
 		fmt.Printf("Database: %s\n", filepath.Join(dbDir, "subtitles.db"))
-		fmt.Printf("Workers:  %d\n\n", cfg.Workers)
+		fmt.Printf("Workers:  %d\n\n", srv.workers.Load())
 		httpServer := &http.Server{Addr: addr, Handler: srv.routes()}
 
 		quit := make(chan os.Signal, 1)
