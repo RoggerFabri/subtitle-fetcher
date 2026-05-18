@@ -492,6 +492,7 @@ main { padding: 24px; }
 }
 .subtitle-del-btn {
   font-size: 11px; padding: 2px 8px; flex-shrink: 0;
+  color: var(--red); border-color: var(--red);
 }
 .subtitle-del-btn.btn-confirm {
   background: var(--red); color: #fff; border-color: var(--red);
