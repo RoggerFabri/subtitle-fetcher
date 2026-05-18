@@ -13,6 +13,7 @@ import (
 // SubtitleCandidate is one search result returned by SearchSubtitles.
 type SubtitleCandidate struct {
 	Provider  string `json:"provider"`
+	Language  string `json:"language"`  // ISO 639-1 code, e.g. "en"
 	Name      string `json:"name"`      // release name
 	Downloads int    `json:"downloads"` // 0 if unknown
 	Format    string `json:"format"`    // "srt", "ass", etc.

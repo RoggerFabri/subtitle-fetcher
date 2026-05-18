@@ -171,7 +171,11 @@ func (p *wyzieProvider) SearchSubtitles(videoPath, show string, keywords []strin
 		if f, ok := r["format"].(string); ok && f != "" {
 			format = f
 		}
-		out = append(out, SubtitleCandidate{Provider: "wyzie", Name: name, Downloads: downloads, Format: format, Token: "wyzie:" + u})
+		lang, _ := r["language"].(string)
+		if lang == "" {
+			lang = "en"
+		}
+		out = append(out, SubtitleCandidate{Provider: "wyzie", Language: lang, Name: name, Downloads: downloads, Format: format, Token: "wyzie:" + u})
 	}
 	return out, nil
 }

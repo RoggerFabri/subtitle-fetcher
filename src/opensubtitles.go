@@ -402,6 +402,7 @@ func (p *openSubtitlesProvider) SearchSubtitles(videoPath, show string, keywords
 		}
 		out = append(out, SubtitleCandidate{
 			Provider:  "opensubtitles",
+			Language:  attrString(r, "language"),
 			Name:      attrString(r, "release"),
 			Downloads: downloadCount(r),
 			Format:    "srt",

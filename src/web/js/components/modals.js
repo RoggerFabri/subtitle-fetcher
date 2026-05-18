@@ -79,6 +79,7 @@ export async function doPickerSearch(query) {
     body.innerHTML = candidates.map((c, i) => `
       <div class="picker-row" onclick="window.app.downloadCandidate(${fileId}, ${i}, this)">
         <span class="picker-provider">${c.provider}</span>
+        <span class="picker-lang">${(c.language || 'en').toUpperCase()}</span>
         <span class="picker-name" title="${c.name}">${c.name}</span>
         <span class="picker-downloads">${c.downloads > 0 ? c.downloads.toLocaleString() : '—'}</span>
         <span class="picker-format">${c.format.toUpperCase()}</span>

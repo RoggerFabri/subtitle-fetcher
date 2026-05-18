@@ -19,7 +19,7 @@
 - [x] **Search clear button** — no way to clear the search input other than manually selecting and deleting. An ✕ button inside the field fixes this.
 - [x] **Coverage bar in stats** — coverage is shown as a plain percentage. A thin coloured bar (green/yellow/red) would communicate library health at a glance.
 - [x] **Card highlight after fetch** — briefly flash a card green after a subtitle is successfully downloaded, for satisfying visual feedback.
-- [ ] **Subtitle picker language column** — the picker shows Provider / Release / Downloads / Format but no language. Add a language column so users don't have to infer it from the filename.
+- [x] **Subtitle picker language column** — the picker shows Provider / Release / Downloads / Format but no language. Add a language column so users don't have to infer it from the filename.
 - [x] **Toast close button** — toasts auto-dismiss after 3.5 s but can't be manually dismissed. Add an ✕ so long error messages can be read at the user's pace.
 - [x] **Settings unsaved indicator** — "Save all" button gives no indication there are pending changes. Show a subtle dot or change button state when fields are dirty.
 

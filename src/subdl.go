@@ -330,7 +330,11 @@ func (p *subdlProvider) SearchSubtitles(videoPath, show string, keywords []strin
 			name, _ = r["name"].(string)
 		}
 		u, _ := r["url"].(string)
-		out = append(out, SubtitleCandidate{Provider: "subdl", Name: name, Format: "srt", Token: "subdl:" + u})
+		lang, _ := r["language"].(string)
+		if lang == "" {
+			lang = "en"
+		}
+		out = append(out, SubtitleCandidate{Provider: "subdl", Language: lang, Name: name, Format: "srt", Token: "subdl:" + u})
 	}
 	return out, nil
 }
