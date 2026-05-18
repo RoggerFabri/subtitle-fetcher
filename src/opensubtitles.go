@@ -21,15 +21,20 @@ const (
 )
 
 type client struct {
-	hc     *http.Client
-	apiKey string
-	token  string
+	hc       *http.Client
+	apiKey   string
+	username string
+	password string
+	token    string
+	mu       sync.Mutex
 }
 
-func newClient(apiKey string) *client {
+func newClient(apiKey, username, password string) *client {
 	return &client{
-		hc:     &http.Client{Timeout: 30 * time.Second},
-		apiKey: apiKey,
+		hc:       &http.Client{Timeout: 30 * time.Second},
+		apiKey:   apiKey,
+		username: username,
+		password: password,
 	}
 }
 
@@ -68,8 +73,8 @@ func withRetry(label string, doReq func() (*http.Response, error)) (*http.Respon
 	return resp, nil
 }
 
-func (c *client) login(username, password string) error {
-	payload := map[string]string{"username": username, "password": password}
+func (c *client) login() error {
+	payload := map[string]string{"username": c.username, "password": c.password}
 
 	doReq := func() (*http.Response, error) {
 		req, _ := http.NewRequest("POST", apiBase+"/login", jsonBody(payload))
@@ -93,8 +98,18 @@ func (c *client) login(username, password string) error {
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return err
 	}
+	c.mu.Lock()
 	c.token = result.Token
+	c.mu.Unlock()
 	return nil
+}
+
+// relogin clears the current token and logs in again. Used when a 401 is received.
+func (c *client) relogin() error {
+	c.mu.Lock()
+	c.token = ""
+	c.mu.Unlock()
+	return c.login()
 }
 
 func (c *client) logout() {
@@ -126,6 +141,16 @@ func (c *client) search(params map[string]string) ([]map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode == 401 {
+		resp.Body.Close()
+		if err := c.relogin(); err != nil {
+			return nil, fmt.Errorf("re-login failed: %w", err)
+		}
+		resp, err = doReq()
+		if err != nil {
+			return nil, err
+		}
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -153,6 +178,16 @@ func (c *client) requestDownload(fileID int) (string, error) {
 	resp, err := withRetry("download", doReq)
 	if err != nil {
 		return "", err
+	}
+	if resp.StatusCode == 401 {
+		resp.Body.Close()
+		if err := c.relogin(); err != nil {
+			return "", fmt.Errorf("re-login failed: %w", err)
+		}
+		resp, err = doReq()
+		if err != nil {
+			return "", err
+		}
 	}
 	defer resp.Body.Close()
 
@@ -280,6 +315,7 @@ func matchesShow(sub map[string]any, keywords []string) bool {
 type openSubtitlesProvider struct {
 	username, password, apiKey string
 	cl                         *client
+	mu                         sync.Mutex
 }
 
 func newOpenSubtitlesProvider(username, password, apiKey string) *openSubtitlesProvider {
@@ -289,13 +325,25 @@ func newOpenSubtitlesProvider(username, password, apiKey string) *openSubtitlesP
 func (p *openSubtitlesProvider) Name() string { return "opensubtitles" }
 
 func (p *openSubtitlesProvider) Open() error {
-	p.cl = newClient(p.apiKey)
-	return p.cl.login(p.username, p.password)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cl != nil && p.cl.token != "" {
+		return nil // reuse existing session
+	}
+	p.cl = newClient(p.apiKey, p.username, p.password)
+	return p.cl.login()
 }
 
-func (p *openSubtitlesProvider) Close() {
+// Close is a no-op — the session is kept alive between requests (token valid 24 h).
+// Call Logout to explicitly end the session.
+func (p *openSubtitlesProvider) Close() {}
+
+func (p *openSubtitlesProvider) Logout() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if p.cl != nil {
 		p.cl.logout()
+		p.cl = nil
 	}
 }
 

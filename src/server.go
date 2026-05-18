@@ -53,6 +53,9 @@ type server struct {
 
 	watcher *mediaWatcher
 
+	osProvider   *openSubtitlesProvider
+	osProviderMu sync.Mutex
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -97,6 +100,12 @@ func (s *server) Shutdown() {
 	if s.watcher != nil {
 		s.watcher.Stop()
 	}
+	s.osProviderMu.Lock()
+	if s.osProvider != nil {
+		s.osProvider.Logout()
+		s.osProvider = nil
+	}
+	s.osProviderMu.Unlock()
 }
 
 func (s *server) routes() http.Handler {
@@ -471,14 +480,26 @@ func (s *server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 				}
 				switch name {
 				case "opensubtitles":
+					osChanged := false
 					if v, ok := sec["openSubtitles_api_key"].(string); ok && v != "" {
 						setSetting(s.db, settingOSApiKey, v)
+						osChanged = true
 					}
 					if v, ok := sec["password"].(string); ok && v != "" {
 						setSetting(s.db, settingOSPassword, v)
+						osChanged = true
 					}
 					if v, ok := sec["username"].(string); ok && v != "" {
 						setSetting(s.db, settingOSUsername, v)
+						osChanged = true
+					}
+					if osChanged {
+						s.osProviderMu.Lock()
+						if s.osProvider != nil {
+							s.osProvider.Logout()
+							s.osProvider = nil
+						}
+						s.osProviderMu.Unlock()
 					}
 				case "subdl":
 					if v, ok := sec["api_key"].(string); ok && v != "" {
@@ -629,7 +650,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	// Legacy: test OpenSubtitles via login + user-info
-	providers, err := loadProviders(s.db)
+	providers, err := s.loadProviders()
 	if err != nil {
 		jsonOK(w, map[string]any{"ok": false, "error": err.Error()})
 		return
@@ -749,18 +770,18 @@ func (s *server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 
 // --- provider loading ---
 
-func loadProviders(db *sql.DB) ([]subtitleProvider, error) {
+func (s *server) loadProviders() ([]subtitleProvider, error) {
 	defaults := providerDefaults()
 	for k := range defaults {
-		if getSetting(db, k) == "" {
-			setSetting(db, k, defaults[k])
+		if getSetting(s.db, k) == "" {
+			setSetting(s.db, k, defaults[k])
 		}
 	}
 
-	order := getSetting(db, settingProviderOrder)
+	order := getSetting(s.db, settingProviderOrder)
 	if strings.Contains(order, "podnapisi") {
 		order = strings.ReplaceAll(order, "podnapisi", "wyzie")
-		setSetting(db, settingProviderOrder, order)
+		setSetting(s.db, settingProviderOrder, order)
 	}
 	if order == "" {
 		order = defaults[settingProviderOrder]
@@ -772,23 +793,29 @@ func loadProviders(db *sql.DB) ([]subtitleProvider, error) {
 		if name == "" {
 			continue
 		}
-		if getSetting(db, name+"_enabled") == "0" {
+		if getSetting(s.db, name+"_enabled") == "0" {
 			continue
 		}
 		switch name {
 		case "opensubtitles":
-			u, pw, k := getSetting(db, settingOSUsername),
-				getSetting(db, settingOSPassword),
-				getSetting(db, settingOSApiKey)
+			u, pw, k := getSetting(s.db, settingOSUsername),
+				getSetting(s.db, settingOSPassword),
+				getSetting(s.db, settingOSApiKey)
 			if u != "" && pw != "" && k != "" {
-				out = append(out, newOpenSubtitlesProvider(u, pw, k))
+				s.osProviderMu.Lock()
+				if s.osProvider == nil {
+					s.osProvider = newOpenSubtitlesProvider(u, pw, k)
+				}
+				p := s.osProvider
+				s.osProviderMu.Unlock()
+				out = append(out, p)
 			}
 		case "subdl":
-			if k := getSetting(db, settingSubDLApiKey); k != "" {
+			if k := getSetting(s.db, settingSubDLApiKey); k != "" {
 				out = append(out, newSubDLProvider(k))
 			}
 		case "wyzie":
-			if k := getSetting(db, settingWyzieApiKey); k != "" {
+			if k := getSetting(s.db, settingWyzieApiKey); k != "" {
 				out = append(out, newWyzieProvider(k))
 			}
 		}
@@ -806,8 +833,8 @@ func (s *server) makeClient() (*client, error) {
 	if username == "" || password == "" || apiKey == "" {
 		return nil, fmt.Errorf("credentials not configured — open Settings")
 	}
-	cl := newClient(apiKey)
-	if err := cl.login(username, password); err != nil {
+	cl := newClient(apiKey, username, password)
+	if err := cl.login(); err != nil {
 		return nil, err
 	}
 	return cl, nil
@@ -853,7 +880,7 @@ func (s *server) fetchSubtitlesForFiles(files []apiFile, media apiMedia) map[str
 		return map[string]any{"downloaded": 0, "failed": 0}
 	}
 
-	providers, err := loadProviders(s.db)
+	providers, err := s.loadProviders()
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
@@ -1043,7 +1070,7 @@ func (s *server) handleSearchFile(w http.ResponseWriter, r *http.Request) {
 	var m apiMedia
 	s.db.QueryRow(`SELECT id, name, type, imdb_id FROM media WHERE id=?`, mediaID).Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID)
 
-	providers, err := loadProviders(s.db)
+	providers, err := s.loadProviders()
 	if err != nil || len(providers) == 0 {
 		jsonOK(w, []SubtitleCandidate{})
 		return
@@ -1131,7 +1158,7 @@ func (s *server) handleDownloadCandidate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	providers, err := loadProviders(s.db)
+	providers, err := s.loadProviders()
 	if err != nil {
 		jsonError(w, err.Error(), 500)
 		return
