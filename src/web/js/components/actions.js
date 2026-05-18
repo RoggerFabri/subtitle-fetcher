@@ -158,7 +158,7 @@ export async function fetchMedia(id, event) {
     showToast(`${name ? `"${name}" — ` : ''}fetch failed`, "error");
   } finally {
     state.fetchingMediaIds.delete(id);
-    setFetching(btn, false);
+    setFetching(document.getElementById(`fetch-media-${id}`), false);
     unlockMediaChildren(id);
   }
 }
@@ -187,7 +187,7 @@ export async function fetchSeason(id, season, event) {
     showToast(`${name ? `"${name}" S${season}` : `Season ${season}`} — fetch failed`, "error");
   } finally {
     state.fetchingSeasonKeys.delete(seasonKey);
-    setFetching(btn, false);
+    setFetching(document.getElementById(`fetch-season-${id}-${season}`), false);
     unlockSeasonChildren(id, season);
   }
 }
@@ -233,9 +233,10 @@ export async function fetchFile(id, event) {
     showToast(`${label} — fetch failed`, "error");
   } finally {
     state.fetchingFileIds.delete(id);
-    if (btn) {
-      btn.classList.remove('fetching');
-      btn.disabled = false;
+    const freshBtn = document.getElementById(`fetch-file-${id}`);
+    if (freshBtn) {
+      freshBtn.classList.remove('fetching');
+      freshBtn.disabled = false;
     }
   }
 }
