@@ -76,55 +76,33 @@ export async function triggerScan() {
   if (state.isScanning) return;
 
   const btn = document.getElementById('btn-scan');
-  const statusEl = document.getElementById('scan-status');
-  const progressBarContainer = document.getElementById('scan-progress-container');
-  const progressBarFill = document.getElementById('scan-progress-bar-fill');
 
   try {
     state.isScanning = true;
     if (btn) btn.disabled = true;
-    if (progressBarFill) progressBarFill.style.width = '0%';
-    if (statusEl) statusEl.textContent = "Initiating scan…";
-    if (progressBarContainer) progressBarContainer.classList.add('scan-visible');
 
     await api.apiPostScan();
 
     while (true) {
       await new Promise(r => setTimeout(r, 1000));
       let sData;
-      try {
-        sData = await api.apiGetScanStatus();
-      } catch {
-        continue;
-      }
-      
-      if (statusEl && sData.status) statusEl.textContent = sData.status;
+      try { sData = await api.apiGetScanStatus(); } catch { continue; }
 
-      if (progressBarFill && sData.total > 0) {
-        const progress = (sData.current / sData.total) * 100;
-        progressBarFill.style.width = `${progress}%`;
-      } else if (progressBarFill) {
-        progressBarFill.style.width = '0%';
+      if (btn) {
+        btn.textContent = sData.total > 0 ? `${sData.current} / ${sData.total}` : '…';
+        btn.title = sData.status || '';
       }
-      
+
       if (!sData.running) break;
     }
 
-    if (progressBarFill) progressBarFill.style.width = '100%';
-    if (statusEl) statusEl.textContent = "Scan complete";
     showToast("Scan completed successfully", "success");
+    await refreshMediaAndStats();
   } catch (err) {
     showToast(err.message, "error");
   } finally {
     state.isScanning = false;
-    if (btn) btn.disabled = false;
-    await refreshMediaAndStats();
-    await new Promise(r => setTimeout(r, 900));
-    if (progressBarContainer) progressBarContainer.classList.remove('scan-visible');
-    setTimeout(() => {
-      if (progressBarFill) progressBarFill.style.width = '0%';
-      if (statusEl) statusEl.textContent = '';
-    }, 400);
+    if (btn) { btn.disabled = false; btn.textContent = '⟳ Scan'; btn.title = ''; }
   }
 }
 

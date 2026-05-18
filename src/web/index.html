@@ -11,12 +11,6 @@
 <header>
   <h1>Subtitle Fetcher</h1>
   <div class="header-actions">
-    <div id="scan-progress-container">
-      <span id="scan-status"></span>
-      <div id="scan-progress-bar-bg">
-        <div id="scan-progress-bar-fill"></div>
-      </div>
-    </div>
     <button id="btn-auto-imdb">Auto IMDB</button>
     <button id="btn-scan" class="primary">⟳ Scan</button>
     <button id="btn-settings-gear">⚙ Settings</button>
@@ -33,7 +27,10 @@
   <div id="panel-library">
     <div class="stats" id="stats"></div>
     <div class="toolbar">
-      <input id="search" type="text" placeholder="Search…">
+      <div class="search-wrap">
+        <input id="search" type="text" placeholder="Search…">
+        <button id="search-clear" class="search-clear hidden">✕</button>
+      </div>
       <select id="filter-type">
         <option value="">All types</option>
         <option value="movie">Movies</option>
