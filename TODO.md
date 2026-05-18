@@ -15,7 +15,7 @@
 - [x] **Auto-expand after fetch** — after a successful fetch, expand the card so the user sees the result without an extra click.
 - [ ] **Expand / collapse all** — add a toggle-all button next to the search bar for navigating large libraries faster.
 - [x] **Settings panel heading** — heading still reads "Subtitle Providers" but the General section (workers) now sits above it. Update to reflect the full scope.
-- [ ] **Keyboard navigation in subtitle picker** — arrow keys + Enter to select a candidate; currently mouse-only.
+- [x] **Keyboard navigation in subtitle picker** — arrow keys + Enter to select a candidate; currently mouse-only.
 - [x] **Search clear button** — no way to clear the search input other than manually selecting and deleting. An ✕ button inside the field fixes this.
 - [x] **Coverage bar in stats** — coverage is shown as a plain percentage. A thin coloured bar (green/yellow/red) would communicate library health at a glance.
 - [x] **Card highlight after fetch** — briefly flash a card green after a subtitle is successfully downloaded, for satisfying visual feedback.

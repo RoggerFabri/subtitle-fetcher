@@ -377,6 +377,7 @@ main { padding: 24px; }
 }
 .imdb-row:last-child { border-bottom: none; }
 .imdb-row:hover { background: #1e2130; }
+.imdb-row.kb-focus { background: #1e2130; box-shadow: inset 3px 0 0 #3b82f6; }
 .imdb-row-id    { font-size: 10px; font-weight: 700; color: #f5c518; font-variant-numeric: tabular-nums; }
 .imdb-row-title { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .imdb-row-year  { color: var(--muted); text-align: right; }
@@ -432,6 +433,7 @@ main { padding: 24px; }
 }
 .picker-row:last-child { border-bottom: none; }
 .picker-row:hover { background: #1e2130; }
+.picker-row.kb-focus { background: #1e2130; box-shadow: inset 3px 0 0 #3b82f6; }
 .picker-row.loading { opacity: .5; pointer-events: none; }
 
 .picker-busy .modal-close { opacity: .3; cursor: not-allowed; pointer-events: none; }

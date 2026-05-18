@@ -131,6 +131,8 @@ document.addEventListener('keydown', function(e) {
     window.app.closePicker();
     window.app.closeImdbPicker();
   }
+  window.app.handlePickerKey(e);
+  window.app.handleImdbKey(e);
   const modalOpen = !document.getElementById('picker-modal')?.classList.contains('hidden') ||
                     !document.getElementById('imdb-modal')?.classList.contains('hidden');
   if (e.key === '/' && !modalOpen && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {

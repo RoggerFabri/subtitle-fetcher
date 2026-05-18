@@ -3,6 +3,50 @@ import * as api from '../api.js';
 import { showToast } from '../utils.js';
 import { refreshMediaAndStats, fileInfoById } from './actions.js';
 
+let pickerFocusIndex = -1;
+let imdbFocusIndex = -1;
+
+function applyFocus(rows, index) {
+  rows.forEach((r, i) => r.classList.toggle('kb-focus', i === index));
+  if (index >= 0 && rows[index]) rows[index].scrollIntoView({ block: 'nearest' });
+}
+
+export function handlePickerKey(e) {
+  if (document.getElementById('picker-modal')?.classList.contains('hidden')) return;
+  const rows = [...document.querySelectorAll('#picker-body .picker-row')];
+  if (!rows.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    pickerFocusIndex = Math.min(pickerFocusIndex + 1, rows.length - 1);
+    applyFocus(rows, pickerFocusIndex);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    pickerFocusIndex = Math.max(pickerFocusIndex - 1, 0);
+    applyFocus(rows, pickerFocusIndex);
+  } else if (e.key === 'Enter' && pickerFocusIndex >= 0) {
+    e.preventDefault();
+    rows[pickerFocusIndex]?.click();
+  }
+}
+
+export function handleImdbKey(e) {
+  if (document.getElementById('imdb-modal')?.classList.contains('hidden')) return;
+  const rows = [...document.querySelectorAll('#imdb-picker-body .imdb-row')];
+  if (!rows.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    imdbFocusIndex = Math.min(imdbFocusIndex + 1, rows.length - 1);
+    applyFocus(rows, imdbFocusIndex);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    imdbFocusIndex = Math.max(imdbFocusIndex - 1, 0);
+    applyFocus(rows, imdbFocusIndex);
+  } else if (e.key === 'Enter' && imdbFocusIndex >= 0) {
+    e.preventDefault();
+    rows[imdbFocusIndex]?.click();
+  }
+}
+
 export async function openPicker(fileId, event) {
   if (event) event.stopPropagation();
   state.pickerFileId = fileId;
@@ -31,6 +75,7 @@ export async function doPickerSearch(query) {
       return;
     }
     state.pickerCandidates = candidates;
+    pickerFocusIndex = -1;
     body.innerHTML = candidates.map((c, i) => `
       <div class="picker-row" onclick="window.app.downloadCandidate(${fileId}, ${i}, this)">
         <span class="picker-provider">${c.provider}</span>
@@ -126,6 +171,7 @@ export function onImdbSearchInput(val) {
         body.innerHTML = '<div class="picker-empty">No results.</div>';
         return;
       }
+      imdbFocusIndex = -1;
       body.innerHTML = `
         <div class="imdb-cols"><span>ID</span><span>Title</span><span style="text-align:right">Year</span><span>Type</span><span></span></div>
         ${results.map(r => `
