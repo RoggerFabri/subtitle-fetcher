@@ -74,18 +74,10 @@ func discoverIMDBID(showName, mediaType string) string {
 		}
 	}
 
-	accepts := func(q string) bool {
-		q = strings.ToLower(q)
-		if mediaType == "movie" {
-			return q == "feature" || q == "tv movie" || q == "video"
-		}
-		return q == "tv series" || q == "tv mini series" || q == "tv mini-series"
-	}
-
 	best := ""
 	bestScore := -1
 	for _, item := range suggestions {
-		if !accepts(item.Type) {
+		if !imdbTypeMatches(mediaType, item.Type) {
 			continue
 		}
 		title := strings.ToLower(item.Title)

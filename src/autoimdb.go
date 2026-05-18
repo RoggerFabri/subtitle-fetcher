@@ -38,6 +38,16 @@ func normalizeTitle(s string) string {
 	return strings.Join(strings.Fields(b.String()), " ")
 }
 
+// imdbTypeMatches reports whether an IMDB suggestion type is compatible with
+// the local media type ("movie" or "series").
+func imdbTypeMatches(mediaType, imdbType string) bool {
+	q := strings.ToLower(imdbType)
+	if mediaType == "movie" {
+		return q == "feature" || q == "tv movie" || q == "video"
+	}
+	return q == "tv series" || q == "tv mini series" || q == "tv mini-series"
+}
+
 // autoIMDBStatus holds live progress for the current run.
 type autoIMDBStatus struct {
 	mu      sync.RWMutex
@@ -115,13 +125,7 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 		autoIMDB.Total = len(entries)
 		autoIMDB.mu.Unlock()
 
-		acceptsType := func(mediaType, q string) bool {
-			q = strings.ToLower(q)
-			if mediaType == "movie" {
-				return q == "feature" || q == "tv movie" || q == "video"
-			}
-			return q == "tv series" || q == "tv mini series" || q == "tv mini-series"
-		}
+		acceptsType := imdbTypeMatches
 
 		for i, e := range entries {
 			if ctx.Err() != nil {
