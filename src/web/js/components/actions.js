@@ -6,41 +6,43 @@ import { renderList, updateStats } from './mediaList.js';
 
 export async function refreshData() {
   try {
-    const settings = await api.apiGetSettings();
+    const [settings, data] = await Promise.all([api.apiGetSettings(), api.apiGetReport()]);
     loadSettings(settings);
-    await refreshMediaAndStats();
+    applyMediaData(data);
   } catch (err) {
     console.error(err);
     showToast("Failed to load initial data from server", "error");
   }
 }
 
+function applyMediaData(data) {
+  state.mediaData = Array.isArray(data) ? data : (data.media || []);
+
+  state.mediaData.forEach(m => {
+    const files = m.files || m.Files || [];
+    m.subtitles_count = files.filter(f => f.has_subtitle || f.HasSubtitle).length;
+    m.total_count = files.length;
+
+    if (m.total_count === 0) m.status = 'missing';
+    else if (m.subtitles_count === m.total_count) m.status = 'complete';
+    else if (m.subtitles_count > 0) m.status = 'partial';
+    else m.status = 'missing';
+  });
+
+  renderList();
+
+  const total = state.mediaData.reduce((acc, m) => acc + m.total_count, 0);
+  const subbed = state.mediaData.reduce((acc, m) => acc + m.subtitles_count, 0);
+  updateStats({
+    total_files: total,
+    missing: total - subbed,
+    coverage: total > 0 ? Math.round((subbed / total) * 100) : 0
+  });
+}
+
 export async function refreshMediaAndStats() {
   try {
-    const data = await api.apiGetReport();
-    state.mediaData = Array.isArray(data) ? data : (data.media || []);
-    
-    state.mediaData.forEach(m => {
-      const files = m.files || m.Files || [];
-      m.subtitles_count = files.filter(f => f.has_subtitle || f.HasSubtitle).length;
-      m.total_count = files.length;
-      
-      if (m.total_count === 0) m.status = 'missing';
-      else if (m.subtitles_count === m.total_count) m.status = 'complete';
-      else if (m.subtitles_count > 0) m.status = 'partial';
-      else m.status = 'missing';
-    });
-
-    renderList();
-
-    const total = state.mediaData.reduce((acc, m) => acc + m.total_count, 0);
-    const subbed = state.mediaData.reduce((acc, m) => acc + m.subtitles_count, 0);
-    const stats = {
-      total_files: total,
-      missing: total - subbed,
-      coverage: total > 0 ? Math.round((subbed / total) * 100) : 0
-    };
-    updateStats(stats);
+    applyMediaData(await api.apiGetReport());
   } catch (err) {
     console.error(err);
     showToast("Failed to refresh media data", "error");
