@@ -232,6 +232,10 @@ func (p *wyzieProvider) search(imdbID string, season, episode int, hasSE bool) (
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == 400 {
+		// Wyzie returns 400 "No subtitles found" instead of 200+empty array.
+		return nil, nil
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("search failed %d (url=%s): %s", resp.StatusCode, u.String(), body)
 	}
