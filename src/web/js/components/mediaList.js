@@ -1,12 +1,28 @@
 import { state } from '../state.js';
 import { getStatusColor } from '../utils.js';
+import { apiGetMediaFiles } from '../api.js';
 
-export function toggleExpand(id) {
+export async function toggleExpand(id) {
   if (state.expandedIds.has(id)) {
     state.expandedIds.delete(id);
-  } else {
-    state.expandedIds.add(id);
+    renderList();
+    return;
   }
+
+  state.expandedIds.add(id);
+
+  if (!state.fileCache.has(id)) {
+    renderList(); // show loading state immediately
+    try {
+      const files = await apiGetMediaFiles(id);
+      state.fileCache.set(id, files);
+      const m = state.mediaData.find(m => (m.id || m.Id) === id);
+      if (m) m.files = files;
+    } catch {
+      state.expandedIds.delete(id);
+    }
+  }
+
   renderList();
 }
 
@@ -93,6 +109,11 @@ export function renderList() {
 export function renderMediaBody(m) {
   const type = m.type || m.Type;
   const id = m.id || m.Id;
+
+  if (!state.fileCache.has(id)) {
+    return `<div class="media-body"><div class="files-loading">Loading…</div></div>`;
+  }
+
   const files = m.files || m.Files || [];
 
   if (type === 'movie') {

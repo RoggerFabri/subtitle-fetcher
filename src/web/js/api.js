@@ -10,6 +10,12 @@ export async function apiGetReport() {
   return res.json();
 }
 
+export async function apiGetMediaFiles(id) {
+  const res = await fetch(`/api/media/${id}/files`);
+  if (!res.ok) throw new Error("Failed to load files");
+  return res.json();
+}
+
 export async function apiPostScan() {
   const res = await fetch('/api/scan', { method: 'POST' });
   if (!res.ok) {

@@ -12,5 +12,6 @@ export const state = {
   pickerCandidates: [],
   imdbSearchTimer: null,
   imdbTargetMediaId: null,
-  workers: 5
+  workers: 5,
+  fileCache: new Map()  // mediaId → apiFile[]
 };

@@ -19,9 +19,18 @@ function applyMediaData(data) {
   state.mediaData = Array.isArray(data) ? data : (data.media || []);
 
   state.mediaData.forEach(m => {
-    const files = m.files || m.Files || [];
-    m.subtitles_count = files.filter(f => f.has_subtitle || f.HasSubtitle).length;
-    m.total_count = files.length;
+    const id = m.id || m.Id;
+    // Re-attach cached files so expanded cards stay populated after a refresh.
+    if (state.fileCache.has(id)) {
+      m.files = state.fileCache.get(id);
+    }
+    // Counts come from the server (GROUP BY); fall back to computing from files
+    // for backwards-compatibility if an old response still includes them.
+    if (m.total_count == null) {
+      const files = m.files || [];
+      m.total_count = files.length;
+      m.subtitles_count = files.filter(f => f.has_subtitle || f.HasSubtitle).length;
+    }
 
     if (m.total_count === 0) m.status = 'missing';
     else if (m.subtitles_count === m.total_count) m.status = 'complete';
@@ -43,6 +52,20 @@ function applyMediaData(data) {
 export async function refreshMediaAndStats() {
   try {
     applyMediaData(await api.apiGetReport());
+
+    // Re-fetch files for any currently expanded cards so their content stays fresh.
+    const expandedIds = [...state.expandedIds];
+    if (expandedIds.length > 0) {
+      await Promise.all(expandedIds.map(async id => {
+        try {
+          const files = await api.apiGetMediaFiles(id);
+          state.fileCache.set(id, files);
+          const m = state.mediaData.find(m => (m.id || m.Id) === id);
+          if (m) m.files = files;
+        } catch { /* leave stale cache in place */ }
+      }));
+      renderList();
+    }
   } catch (err) {
     console.error(err);
     showToast("Failed to refresh media data", "error");
@@ -138,6 +161,7 @@ export async function fetchMedia(id, event) {
     const prefix = name ? `"${name}" — ` : '';
     const type = data.downloaded > 0 ? 'success' : 'error';
     showToast(`${prefix}${data.downloaded} downloaded, ${data.failed} failed`, type);
+    state.fileCache.delete(id);
     await refreshMediaAndStats();
   } catch (err) {
     showToast(`${name ? `"${name}" — ` : ''}fetch failed`, "error");
@@ -158,6 +182,7 @@ export async function fetchSeason(id, season, event) {
     const prefix = name ? `"${name}" S${String(season).padStart(2,'0')} — ` : `Season ${season} — `;
     const type = data.downloaded > 0 ? 'success' : 'error';
     showToast(`${prefix}${data.downloaded} downloaded, ${data.failed} failed`, type);
+    state.fileCache.delete(id);
     await refreshMediaAndStats();
   } catch (err) {
     showToast(`${name ? `"${name}" S${season}` : `Season ${season}`} — fetch failed`, "error");
@@ -182,6 +207,7 @@ export async function fetchFile(id, event) {
     } else {
       showToast(`${label} — no subtitle found`, "error");
     }
+    if (info) state.fileCache.delete(info.media.id || info.media.Id);
     await refreshMediaAndStats();
   } catch (err) {
     showToast(`${label} — fetch failed`, "error");
@@ -222,6 +248,7 @@ export async function deleteSubtitle(id, event) {
   try {
     await api.apiDeleteSubtitle(id);
     showToast(`${label} — subtitle deleted`, 'info');
+    if (info) state.fileCache.delete(info.media.id || info.media.Id);
     await refreshMediaAndStats();
   } catch (err) {
     showToast(`${label} — delete failed: ${err.message}`, 'error');
