@@ -118,7 +118,7 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 		acceptsType := func(mediaType, q string) bool {
 			q = strings.ToLower(q)
 			if mediaType == "movie" {
-				return q == "feature"
+				return q == "feature" || q == "tv movie" || q == "video"
 			}
 			return q == "tv series" || q == "tv mini series" || q == "tv mini-series"
 		}
