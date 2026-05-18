@@ -81,16 +81,15 @@ export function renderList() {
     let chooseBtn = '';
     let fetchBtn = `<button class="fetch-btn" id="fetch-media-${id}" onclick="window.app.fetchMedia(${id}, event)">${label}</button>`;
     if (type === 'movie') {
-      const files = m.files || m.Files || [];
-      if (files.length > 0) {
+      if (m.status === 'complete') {
+        fetchBtn = '';
+      } else {
+        const files = m.files || m.Files || [];
         const firstFile = files[0];
-        const firstFileId = firstFile.id || firstFile.Id;
-        const hasSub = firstFile.has_subtitle || firstFile.HasSubtitle;
-        if (!hasSub) {
-          chooseBtn = `<button class="fetch-btn" onclick="window.app.openPicker(${firstFileId}, event)">Choose</button>`;
-        } else {
-          fetchBtn = '';
-        }
+        const firstFileId = firstFile ? (firstFile.id || firstFile.Id) : null;
+        chooseBtn = firstFileId
+          ? `<button class="fetch-btn" onclick="window.app.openPicker(${firstFileId}, event)">Choose</button>`
+          : `<button class="fetch-btn" onclick="window.app.chooseMovieSubtitle(${id}, event)">Choose</button>`;
       }
     }
 

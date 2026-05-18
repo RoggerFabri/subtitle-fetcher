@@ -4,6 +4,7 @@ import * as api from '../api.js';
 import { loadSettings } from './settings.js';
 import { renderList, updateStats } from './mediaList.js';
 
+
 export async function refreshData() {
   try {
     const [settings, data] = await Promise.all([api.apiGetSettings(), api.apiGetReport()]);
@@ -179,6 +180,23 @@ export async function fetchSeason(id, season, event) {
     setFetching(btn, false);
     unlockSeasonChildren(id, season);
   }
+}
+
+export async function chooseMovieSubtitle(mediaId, event) {
+  if (event) event.stopPropagation();
+  let files = state.fileCache.get(mediaId);
+  if (!files) {
+    try {
+      files = await api.apiGetMediaFiles(mediaId);
+      state.fileCache.set(mediaId, files);
+      const m = state.mediaData.find(m => (m.id || m.Id) === mediaId);
+      if (m) m.files = files;
+      renderList();
+    } catch { return; }
+  }
+  const firstFile = files[0];
+  if (!firstFile) return;
+  window.app.openPicker(firstFile.id || firstFile.Id, event);
 }
 
 export async function fetchFile(id, event) {
