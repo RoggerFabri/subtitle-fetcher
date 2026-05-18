@@ -386,8 +386,12 @@ main { padding: 24px; }
 }
 .modal {
   background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-  width: 760px; max-width: 95vw; max-height: 80vh;
+  width: min(860px, 92vw); max-height: 85vh;
   display: flex; flex-direction: column; overflow: hidden;
+}
+@media (max-width: 600px) {
+  .modal { width: 96vw; max-height: 90vh; border-radius: 8px; }
+  .picker-cols, .picker-row { grid-template-columns: 80px 1fr 70px 50px; gap: 8px; }
 }
 .modal-header {
   display: flex; align-items: center; justify-content: space-between;
