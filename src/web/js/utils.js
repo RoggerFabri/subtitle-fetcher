@@ -3,8 +3,22 @@ export function showToast(msg, type = "success") {
   if (!container) return;
   const t = document.createElement('div');
   t.className = `toast ${type}`;
-  t.textContent = msg;
+
+  const text = document.createElement('span');
+  text.textContent = msg;
+
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.textContent = '✕';
+  close.addEventListener('click', () => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 250);
+  });
+
+  t.appendChild(text);
+  t.appendChild(close);
   container.appendChild(t);
+
   requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
   setTimeout(() => {
     t.classList.remove('show');

@@ -209,11 +209,17 @@ export function updateStats(stats) {
   if (!el || !stats) return;
   const movies = (state.mediaData || []).filter(m => (m.type || m.Type) === 'movie').length;
   const series = (state.mediaData || []).filter(m => (m.type || m.Type) === 'series').length;
+  const pct = stats.coverage;
+  const barColor = pct >= 80 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)';
   el.innerHTML = `
     <div class="stat"><div class="stat-label">Total Files</div><div class="stat-value">${stats.total_files}</div></div>
     <div class="stat"><div class="stat-label">Movies</div><div class="stat-value">${movies}</div></div>
     <div class="stat"><div class="stat-label">Series</div><div class="stat-value">${series}</div></div>
-    <div class="stat"><div class="stat-label">Coverage</div><div class="stat-value">${stats.coverage}%</div></div>
+    <div class="stat stat-coverage">
+      <div class="stat-label">Coverage</div>
+      <div class="stat-value">${pct}%</div>
+      <div class="coverage-bar-track"><div class="coverage-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+    </div>
     <div class="stat"><div class="stat-label">Missing</div><div class="stat-value" style="color:var(--red)">${stats.missing}</div></div>
   `;
 }

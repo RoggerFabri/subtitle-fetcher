@@ -13,5 +13,6 @@ export const state = {
   imdbSearchTimer: null,
   imdbTargetMediaId: null,
   workers: 5,
-  fileCache: new Map()  // mediaId → apiFile[]
+  fileCache: new Map(),  // mediaId → apiFile[]
+  settingsDirty: false
 };

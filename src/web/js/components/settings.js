@@ -24,6 +24,19 @@ export function loadSettings(s) {
   renderSettings();
 }
 
+export function markDirty() {
+  if (state.settingsDirty) return;
+  state.settingsDirty = true;
+  const btn = document.querySelector('.save-all-btn');
+  if (btn) btn.classList.add('dirty');
+}
+
+function markClean() {
+  state.settingsDirty = false;
+  const btn = document.querySelector('.save-all-btn');
+  if (btn) btn.classList.remove('dirty');
+}
+
 export function renderSettings() {
   const container = document.getElementById('provider-list');
   if (!container) return;
@@ -52,34 +65,35 @@ export function renderSettings() {
     if (!state.providerFields[name]) state.providerFields[name] = {};
     const fields = state.providerFields[name];
 
+    const dirty = "window.app.markDirty()";
     let fieldsHtml = '';
     if (name === 'opensubtitles') {
       fieldsHtml = `
         <div class="provider-field-row">
           <label>Username</label>
-          <input type="text" value="${fields.username || ''}" oninput="window.app.state.providerFields['${name}'].username = this.value">
+          <input type="text" value="${fields.username || ''}" oninput="window.app.state.providerFields['${name}'].username = this.value; ${dirty}">
         </div>
         <div class="provider-field-row">
           <label>Password</label>
-          <input type="password" placeholder="••••••••" oninput="window.app.state.providerFields['${name}'].password = this.value">
+          <input type="password" placeholder="••••••••" oninput="window.app.state.providerFields['${name}'].password = this.value; ${dirty}">
         </div>
         <div class="provider-field-row">
           <label>API Key</label>
-          <input type="text" value="${fields.api_key || fields.openSubtitles_api_key || ''}" oninput="window.app.state.providerFields['${name}'].openSubtitles_api_key = this.value">
+          <input type="text" value="${fields.api_key || fields.openSubtitles_api_key || ''}" oninput="window.app.state.providerFields['${name}'].openSubtitles_api_key = this.value; ${dirty}">
         </div>
       `;
     } else if (name === 'subdl') {
       fieldsHtml = `
         <div class="provider-field-row">
           <label>API Key</label>
-          <input type="text" value="${fields.api_key || ''}" oninput="window.app.state.providerFields['${name}'].api_key = this.value">
+          <input type="text" value="${fields.api_key || ''}" oninput="window.app.state.providerFields['${name}'].api_key = this.value; ${dirty}">
         </div>
       `;
     } else if (name === 'wyzie') {
       fieldsHtml = `
         <div class="provider-field-row">
           <label>API Key</label>
-          <input type="text" value="${fields.api_key || ''}" oninput="window.app.state.providerFields['${name}'].api_key = this.value">
+          <input type="text" value="${fields.api_key || ''}" oninput="window.app.state.providerFields['${name}'].api_key = this.value; ${dirty}">
         </div>
         <div class="provider-field-row">
           <label style="font-size:10px">Get a free key at <a href="https://sub.wyzie.io/redeem" target="_blank" style="color:var(--blue)">sub.wyzie.io/redeem</a></label>
@@ -100,7 +114,7 @@ export function renderSettings() {
             <button class="btn-sm" onclick="window.app.moveProvider('${name}',  1)" ${index === lastIdx ? 'disabled' : ''} title="Move down">↓</button>
             <button class="btn-sm btn-test" onclick="window.app.testProvider('${name}')">Test</button>
             <label class="provider-toggle-label">
-              <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.app.state.providerEnabled['${name}'] = this.checked; window.app.saveAllProviders();">
+              <input type="checkbox" ${isEnabled ? 'checked' : ''} onchange="window.app.state.providerEnabled['${name}'] = this.checked; window.app.markDirty(); window.app.saveAllProviders();">
             </label>
           </div>
         </div>
@@ -120,6 +134,7 @@ export function moveProvider(name, dir) {
   const j = i + dir;
   if (j < 0 || j >= state.providerOrder.length) return;
   [state.providerOrder[i], state.providerOrder[j]] = [state.providerOrder[j], state.providerOrder[i]];
+  markDirty();
   renderSettings();
 }
 
@@ -134,7 +149,8 @@ export async function saveAllProviders() {
 
   try {
     await api.apiSaveSettings(payload);
-    showToast("Settings saved successfully");
+    markClean();
+    showToast("Settings saved");
   } catch (err) {
     showToast("Failed to save settings", "error");
   }

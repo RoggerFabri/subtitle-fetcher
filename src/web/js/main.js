@@ -41,12 +41,20 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('tab-library')?.addEventListener('click', () => window.app.showTab('library'));
   document.getElementById('tab-settings')?.addEventListener('click', () => window.app.showTab('settings'));
   
-  document.getElementById('search')?.addEventListener('input', window.app.renderList);
-  document.getElementById('search')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      window.app.refreshData();
-    }
+  const searchEl = document.getElementById('search');
+  const searchClear = document.getElementById('search-clear');
+  searchEl?.addEventListener('input', () => {
+    searchClear?.classList.toggle('hidden', !searchEl.value);
+    window.app.renderList();
+  });
+  searchEl?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); window.app.refreshData(); }
+  });
+  searchClear?.addEventListener('click', () => {
+    searchEl.value = '';
+    searchClear.classList.add('hidden');
+    window.app.renderList();
+    searchEl.focus();
   });
   
   document.getElementById('filter-type')?.addEventListener('change', window.app.renderList);
