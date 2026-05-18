@@ -51,18 +51,28 @@ func imdbTypeMatches(mediaType, imdbType string) bool {
 // autoIMDBStatus holds live progress for the current run.
 type autoIMDBStatus struct {
 	mu      sync.RWMutex
+	Running bool
+	Total   int
+	Current int
+	Matched int
+	Skipped int
+	Label   string
+}
+
+// autoIMDBSnapshot is a mutex-free copy safe to pass to encoding/json.
+type autoIMDBSnapshot struct {
 	Running bool   `json:"running"`
 	Total   int    `json:"total"`
 	Current int    `json:"current"`
 	Matched int    `json:"matched"`
 	Skipped int    `json:"skipped"`
-	Label   string `json:"label"` // name currently being processed
+	Label   string `json:"label"`
 }
 
-func (s *autoIMDBStatus) snapshot() autoIMDBStatus {
+func (s *autoIMDBStatus) snapshot() autoIMDBSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return autoIMDBStatus{
+	return autoIMDBSnapshot{
 		Running: s.Running,
 		Total:   s.Total,
 		Current: s.Current,
