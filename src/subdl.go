@@ -252,6 +252,18 @@ func (p *subdlProvider) search(params map[string]string) ([]map[string]any, erro
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.StatusCode == 403 || resp.StatusCode == 429 {
+		resp.Body.Close()
+		fmt.Printf("[subdl] rate limited (%d), retrying in 3s…\n", resp.StatusCode)
+		time.Sleep(3 * time.Second)
+		req2, _ := http.NewRequest("GET", u.String(), nil)
+		req2.Header.Set("Accept", "application/json")
+		resp, err = p.hc.Do(req2)
+		if err != nil {
+			return nil, err
+		}
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
