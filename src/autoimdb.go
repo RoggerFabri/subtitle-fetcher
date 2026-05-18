@@ -64,9 +64,12 @@ func (s *autoIMDBStatus) snapshot() autoIMDBStatus {
 
 var autoIMDB autoIMDBStatus
 
-// autoPopulateIMDB iterates all media without an IMDB ID, parses name+year from
-// the folder name, and sets the ID only when there is an exact title+year match
-// in the IMDB suggestion API. Entries without a year suffix are skipped.
+// autoPopulateIMDB iterates all media without an IMDB ID and sets the IMDB ID
+// when there is an unambiguous exact match in the IMDB suggestion API:
+//   - Movies: exact name + year match required (folder must have "(YYYY)" suffix).
+//   - Series: exact name match against "TV Series" or "TV Mini-Series" entries;
+//     year is used as a tie-breaker when present but not required.
+//
 // The provided context can be cancelled to abort the run (e.g. on shutdown).
 func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 	autoIMDB.mu.Lock()
@@ -130,12 +133,17 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 			autoIMDB.Label = e.name
 			autoIMDB.mu.Unlock()
 
-			parsedName, parsedYear, ok := parseNameAndYear(e.name)
-			if !ok {
-				autoIMDB.mu.Lock()
-				autoIMDB.Skipped++
-				autoIMDB.mu.Unlock()
-				continue
+			parsedName, parsedYear, hasYear := parseNameAndYear(e.name)
+			if !hasYear {
+				// Movies require a year suffix to match unambiguously.
+				if e.mediaType != "series" {
+					autoIMDB.mu.Lock()
+					autoIMDB.Skipped++
+					autoIMDB.mu.Unlock()
+					continue
+				}
+				// For series, use the full folder name as-is.
+				parsedName = e.name
 			}
 
 			suggestions, err := fetchIMDBSuggestions(parsedName)
@@ -153,18 +161,30 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 
 			normWant := normalizeTitle(parsedName)
 			var matchID string
+			var candidates []IMDBSuggestion
 			for _, s := range suggestions {
 				if !acceptsType(e.mediaType, s.Type) {
 					continue
 				}
-				if s.Year != parsedYear {
+				if normalizeTitle(s.Title) != normWant {
 					continue
 				}
-				if normalizeTitle(s.Title) == normWant {
-					matchID = s.ID
-					break
+				candidates = append(candidates, s)
+			}
+
+			if len(candidates) == 1 {
+				// Single name match — accept regardless of year.
+				matchID = candidates[0].ID
+			} else if len(candidates) > 1 && hasYear {
+				// Multiple name matches — use year to disambiguate.
+				for _, c := range candidates {
+					if c.Year == parsedYear {
+						matchID = c.ID
+						break
+					}
 				}
 			}
+			// len(candidates) > 1 without a year → ambiguous, skip.
 
 			if matchID == "" {
 				autoIMDB.mu.Lock()
