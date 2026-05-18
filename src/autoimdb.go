@@ -147,13 +147,18 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 			autoIMDB.Label = e.name
 			autoIMDB.mu.Unlock()
 
+			skip := func(reason string) {
+				fmt.Printf("[autoimdb] skip %q — %s\n", e.name, reason)
+				autoIMDB.mu.Lock()
+				autoIMDB.Skipped++
+				autoIMDB.mu.Unlock()
+			}
+
 			parsedName, parsedYear, hasYear := parseNameAndYear(e.name)
 			if !hasYear {
 				// Movies require a year suffix to match unambiguously.
 				if e.mediaType != "series" {
-					autoIMDB.mu.Lock()
-					autoIMDB.Skipped++
-					autoIMDB.mu.Unlock()
+					skip("movie has no year suffix")
 					continue
 				}
 				// For series, use the full folder name as-is.
@@ -166,10 +171,12 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 				suggestions, err = fetchIMDBSuggestions(parsedName)
 			}
 			time.Sleep(300 * time.Millisecond) // be polite to the IMDB API
-			if err != nil || len(suggestions) == 0 {
-				autoIMDB.mu.Lock()
-				autoIMDB.Skipped++
-				autoIMDB.mu.Unlock()
+			if err != nil {
+				skip(fmt.Sprintf("API error: %v", err))
+				continue
+			}
+			if len(suggestions) == 0 {
+				skip("no suggestions from API")
 				continue
 			}
 
@@ -198,12 +205,13 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 					}
 				}
 			}
-			// len(candidates) > 1 without a year → ambiguous, skip.
 
 			if matchID == "" {
-				autoIMDB.mu.Lock()
-				autoIMDB.Skipped++
-				autoIMDB.mu.Unlock()
+				if len(candidates) == 0 {
+					skip("no title match in suggestions")
+				} else {
+					skip(fmt.Sprintf("ambiguous: %d candidates with same name, no year match", len(candidates)))
+				}
 				continue
 			}
 
