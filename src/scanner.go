@@ -107,6 +107,9 @@ func runScanDB(ctx context.Context, db *sql.DB, root string, progressFn func(don
 		close(results)
 	}()
 
+	seenMedia := make(map[string]bool, total)
+	seenFiles := make(map[string]bool)
+
 	done := 0
 	for r := range results {
 		if ctx.Err() != nil {
@@ -117,9 +120,19 @@ func runScanDB(ctx context.Context, db *sql.DB, root string, progressFn func(don
 		if r.scanErr != nil {
 			continue
 		}
+		seenMedia[r.entry.dir] = true
+		for _, f := range r.files {
+			seenFiles[f.path] = true
+		}
 		writeResultToDB(db, r)
 	}
 	doneFn()
+
+	if removedMedia, removedFiles, err := pruneStale(db, seenMedia, seenFiles); err != nil {
+		fmt.Printf("[warn] prune failed: %v\n", err)
+	} else if removedMedia > 0 || removedFiles > 0 {
+		fmt.Printf("[scan] pruned %d media, %d files no longer on disk\n", removedMedia, removedFiles)
+	}
 
 	if printReport {
 		return printScanReport(db)

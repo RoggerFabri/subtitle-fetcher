@@ -104,6 +104,66 @@ func upsertMedia(db *sql.DB, path, name, typ string) (int64, error) {
 	return id, err
 }
 
+// pruneStale removes media rows (and their files via CASCADE) whose paths were
+// not seen in the current scan, and removes individual file rows for files that
+// no longer exist on disk within a still-present media folder.
+func pruneStale(db *sql.DB, seenMedia, seenFiles map[string]bool) (int, int, error) {
+	mediaRows, err := db.Query(`SELECT id, path FROM media`)
+	if err != nil {
+		return 0, 0, err
+	}
+	type idPath struct {
+		id   int64
+		path string
+	}
+	var allMedia []idPath
+	for mediaRows.Next() {
+		var r idPath
+		if err := mediaRows.Scan(&r.id, &r.path); err != nil {
+			mediaRows.Close()
+			return 0, 0, err
+		}
+		allMedia = append(allMedia, r)
+	}
+	mediaRows.Close()
+
+	removedMedia := 0
+	for _, m := range allMedia {
+		if !seenMedia[m.path] {
+			if _, err := db.Exec(`DELETE FROM media WHERE id = ?`, m.id); err != nil {
+				return removedMedia, 0, err
+			}
+			removedMedia++
+		}
+	}
+
+	fileRows, err := db.Query(`SELECT id, path FROM files`)
+	if err != nil {
+		return removedMedia, 0, err
+	}
+	var allFiles []idPath
+	for fileRows.Next() {
+		var r idPath
+		if err := fileRows.Scan(&r.id, &r.path); err != nil {
+			fileRows.Close()
+			return removedMedia, 0, err
+		}
+		allFiles = append(allFiles, r)
+	}
+	fileRows.Close()
+
+	removedFiles := 0
+	for _, f := range allFiles {
+		if !seenFiles[f.path] {
+			if _, err := db.Exec(`DELETE FROM files WHERE id = ?`, f.id); err != nil {
+				return removedMedia, removedFiles, err
+			}
+			removedFiles++
+		}
+	}
+	return removedMedia, removedFiles, nil
+}
+
 func upsertFile(db *sql.DB, mediaID int64, path string, season, episode *int, hasSubtitle bool, subtitleName string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	sub := 0
