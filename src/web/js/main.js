@@ -131,6 +131,10 @@ document.addEventListener('keydown', function(e) {
     window.app.closePicker();
     window.app.closeImdbPicker();
   }
+  if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    document.getElementById('search')?.focus();
+  }
 });
 
 // Since index.html has some window.something calls (e.g. window.onImdbSearchInput, window.closeImdbPicker)
