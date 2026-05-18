@@ -41,7 +41,13 @@ export function renderSettings() {
   `;
 
   const lastIdx = state.providerOrder.length - 1;
-  const providersHtml = state.providerOrder.map((name, index) => {
+  const providersSectionHeader = `
+    <div class="settings-section-label">
+      Providers
+      <span class="settings-section-hint">Tried in priority order — first to succeed stops the chain.</span>
+    </div>
+  `;
+  const providersHtml = providersSectionHeader + state.providerOrder.map((name, index) => {
     const isEnabled = state.providerEnabled[name];
     if (!state.providerFields[name]) state.providerFields[name] = {};
     const fields = state.providerFields[name];

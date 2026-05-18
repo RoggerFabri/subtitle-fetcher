@@ -194,18 +194,35 @@ export async function fetchFile(id, event) {
 export async function deleteSubtitle(id, event) {
   if (event) event.stopPropagation();
   const btn = event.currentTarget;
+
+  if (!btn.dataset.confirming) {
+    btn.dataset.confirming = '1';
+    btn.dataset.label = btn.textContent;
+    btn.textContent = 'Sure?';
+    btn.classList.add('btn-confirm');
+    btn.dataset.confirmTimer = setTimeout(() => {
+      btn.textContent = btn.dataset.label;
+      btn.classList.remove('btn-confirm');
+      delete btn.dataset.confirming;
+    }, 3000);
+    return;
+  }
+
+  clearTimeout(btn.dataset.confirmTimer);
+  delete btn.dataset.confirming;
+  btn.classList.remove('btn-confirm');
+
   const info = fileInfoById(id);
   const label = info
     ? `"${info.media.name || info.media.Name}"${info.file.episode != null ? ` E${String(info.file.episode).padStart(2,'0')}` : ''}`
     : 'file';
   btn.disabled = true;
   try {
-    const data = await api.apiDeleteSubtitle(id);
+    await api.apiDeleteSubtitle(id);
     showToast(`${label} — subtitle deleted`, 'info');
     await refreshMediaAndStats();
   } catch (err) {
     showToast(`${label} — delete failed: ${err.message}`, 'error');
-  } finally {
     btn.disabled = false;
   }
 }

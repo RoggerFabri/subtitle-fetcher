@@ -9,12 +9,12 @@
 ## UI improvements
 
 - [ ] **Sort options** — list order is DB insertion order. Add sort by name (A–Z), coverage %, and type via a dropdown in the toolbar.
-- [ ] **Delete subtitle confirmation** — delete fires immediately with no undo. Add an inline confirmation or grace period to prevent accidental loss.
+- [x] **Delete subtitle confirmation** — delete fires immediately with no undo. Add an inline confirmation or grace period to prevent accidental loss.
 - [ ] **Empty library state** — fresh installs show "No media items found." which is confusing. Replace with a proper empty state and a "Run a scan to get started" CTA.
-- [ ] **Fetch button spinner** — buttons disable during fetch but show no loading indicator. Add a spinner or label change for clearer feedback.
+- [x] **Fetch button spinner** — buttons disable during fetch but show no loading indicator. Add a spinner or label change for clearer feedback.
 - [ ] **Auto-expand after fetch** — after a successful fetch, expand the card so the user sees the result without an extra click.
 - [ ] **Expand / collapse all** — add a toggle-all button next to the search bar for navigating large libraries faster.
-- [ ] **Settings panel heading** — heading still reads "Subtitle Providers" but the General section (workers) now sits above it. Update to reflect the full scope.
+- [x] **Settings panel heading** — heading still reads "Subtitle Providers" but the General section (workers) now sits above it. Update to reflect the full scope.
 - [ ] **Keyboard navigation in subtitle picker** — arrow keys + Enter to select a candidate; currently mouse-only.
 
 ## Medium priority

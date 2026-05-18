@@ -16,6 +16,13 @@ export function setFetching(btn, on) {
   if (!btn) return;
   btn.disabled = on;
   btn.classList.toggle('fetching', on);
+  if (on) {
+    btn.dataset.label = btn.textContent;
+    btn.textContent = '…';
+  } else if (btn.dataset.label) {
+    btn.textContent = btn.dataset.label;
+    delete btn.dataset.label;
+  }
 }
 
 export function getStatusColor(status) {

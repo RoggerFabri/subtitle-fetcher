@@ -238,6 +238,16 @@ main { padding: 24px; }
   width: 70px;
 }
 
+/* ─── Provider section label ─── */
+
+.settings-section-label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em;
+  margin: 20px 0 10px; display: flex; align-items: baseline; gap: 8px;
+}
+.settings-section-hint {
+  font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; opacity: .7;
+}
+
 /* ─── Provider cards ─── */
 
 .provider-card {
@@ -450,4 +460,7 @@ main { padding: 24px; }
 }
 .subtitle-del-btn {
   font-size: 11px; padding: 2px 8px; flex-shrink: 0;
+}
+.subtitle-del-btn.btn-confirm {
+  background: var(--red); color: #fff; border-color: var(--red);
 }
