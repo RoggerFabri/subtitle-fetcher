@@ -64,6 +64,7 @@ export function renderList() {
   const typeFilter = document.querySelector('.pills[data-filter="type"] .pill.active')?.dataset.value || "";
   const statusFilter = document.querySelector('.pills[data-filter="status"] .pill.active')?.dataset.value || "";
   const imdbFilter = document.querySelector('.pills[data-filter="imdb"] .pill.active')?.dataset.value || "";
+  const sortBy = document.querySelector('.pills[data-filter="sort"] .pill.active')?.dataset.value || "";
 
   const filtered = (state.mediaData || []).filter(m => {
     if (m.total_count === 0) return false;
@@ -81,6 +82,23 @@ export function renderList() {
       (imdbFilter === 'no' && !imdbId);
     return matchesSearch && matchesType && matchesStatus && matchesImdb;
   });
+
+  if (sortBy === 'name') {
+    filtered.sort((a, b) => (a.name || a.Name || '').localeCompare(b.name || b.Name || ''));
+  } else if (sortBy === 'coverage') {
+    filtered.sort((a, b) => {
+      const pA = a.total_count > 0 ? a.subtitles_count / a.total_count : 0;
+      const pB = b.total_count > 0 ? b.subtitles_count / b.total_count : 0;
+      return pA - pB; // lowest coverage first — shows what needs attention
+    });
+  } else if (sortBy === 'type') {
+    filtered.sort((a, b) => {
+      const tA = a.type || a.Type || '';
+      const tB = b.type || b.Type || '';
+      if (tA !== tB) return tA.localeCompare(tB); // movie before series
+      return (a.name || a.Name || '').localeCompare(b.name || b.Name || '');
+    });
+  }
 
   if (filtered.length === 0) {
     container.innerHTML = '<div style="padding: 20px; color: var(--muted); text-align: center;">No media items found.</div>';
