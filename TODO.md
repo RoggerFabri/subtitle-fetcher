@@ -13,7 +13,6 @@
 - [x] **Empty library state** — fresh installs show "No media items found." which is confusing. Replace with a proper empty state and a "Run a scan to get started" CTA.
 - [x] **Fetch button spinner** — buttons disable during fetch but show no loading indicator. Add a spinner or label change for clearer feedback.
 - [x] **Auto-expand after fetch** — after a successful fetch, expand the card so the user sees the result without an extra click.
-- [ ] **Expand / collapse all** — add a toggle-all button next to the search bar for navigating large libraries faster.
 - [x] **Settings panel heading** — heading still reads "Subtitle Providers" but the General section (workers) now sits above it. Update to reflect the full scope.
 - [x] **Keyboard navigation in subtitle picker** — arrow keys + Enter to select a candidate; currently mouse-only.
 - [x] **Search clear button** — no way to clear the search input other than manually selecting and deleting. An ✕ button inside the field fixes this.
