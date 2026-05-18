@@ -93,6 +93,10 @@ func autoPopulateIMDB(db *sql.DB) (AutoIMDBResult, error) {
 		}
 
 		suggestions, err := fetchIMDBSuggestions(parsedName)
+		if err != nil {
+			time.Sleep(2 * time.Second)
+			suggestions, err = fetchIMDBSuggestions(parsedName)
+		}
 		time.Sleep(300 * time.Millisecond) // be polite to the IMDB API
 		if err != nil || len(suggestions) == 0 {
 			result.Skipped++
