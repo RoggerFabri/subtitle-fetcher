@@ -150,6 +150,15 @@ function unlockSeasonChildren(mediaId, season) {
   row?.nextElementSibling?.querySelectorAll('.fetch-btn').forEach(b => { b.disabled = false; });
 }
 
+function flashCard(id) {
+  const card = document.getElementById(`fetch-media-${id}`)?.closest('.media-card');
+  if (!card) return;
+  card.classList.remove('flash-success');
+  void card.offsetWidth; // reflow to restart animation
+  card.classList.add('flash-success');
+  card.addEventListener('animationend', () => card.classList.remove('flash-success'), { once: true });
+}
+
 export async function fetchMedia(id, event) {
   if (event) event.stopPropagation();
   const btn = document.getElementById(`fetch-media-${id}`);
@@ -163,6 +172,7 @@ export async function fetchMedia(id, event) {
     showToast(`${prefix}${data.downloaded} downloaded, ${data.failed} failed`, type);
     state.fileCache.delete(id);
     await refreshMediaAndStats();
+    if (data.downloaded > 0) flashCard(id);
   } catch (err) {
     showToast(`${name ? `"${name}" — ` : ''}fetch failed`, "error");
   } finally {
@@ -184,6 +194,7 @@ export async function fetchSeason(id, season, event) {
     showToast(`${prefix}${data.downloaded} downloaded, ${data.failed} failed`, type);
     state.fileCache.delete(id);
     await refreshMediaAndStats();
+    if (data.downloaded > 0) flashCard(id);
   } catch (err) {
     showToast(`${name ? `"${name}" S${season}` : `Season ${season}`} — fetch failed`, "error");
   } finally {
@@ -207,8 +218,10 @@ export async function fetchFile(id, event) {
     } else {
       showToast(`${label} — no subtitle found`, "error");
     }
-    if (info) state.fileCache.delete(info.media.id || info.media.Id);
+    const mediaId = info ? (info.media.id || info.media.Id) : null;
+    if (mediaId) state.fileCache.delete(mediaId);
     await refreshMediaAndStats();
+    if (data.downloaded > 0 && mediaId) flashCard(mediaId);
   } catch (err) {
     showToast(`${label} — fetch failed`, "error");
   } finally {
