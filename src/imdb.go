@@ -79,7 +79,7 @@ func discoverIMDBID(showName, mediaType string) string {
 		if mediaType == "movie" {
 			return q == "feature"
 		}
-		return q == "tv series" || q == "tv mini series"
+		return q == "tv series" || q == "tv mini series" || q == "tv mini-series"
 	}
 
 	best := ""

@@ -120,7 +120,7 @@ func autoPopulateIMDB(ctx context.Context, db *sql.DB) error {
 			if mediaType == "movie" {
 				return q == "feature"
 			}
-			return q == "tv series" || q == "tv mini series"
+			return q == "tv series" || q == "tv mini series" || q == "tv mini-series"
 		}
 
 		for i, e := range entries {
