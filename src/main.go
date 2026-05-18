@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 )
 
 
@@ -43,7 +47,20 @@ func main() {
 		}
 		fmt.Printf("Database: %s\n", filepath.Join(dbDir, "subtitles.db"))
 		fmt.Printf("Workers:  %d\n\n", cfg.Workers)
-		if err := http.ListenAndServe(addr, srv.routes()); err != nil {
+		httpServer := &http.Server{Addr: addr, Handler: srv.routes()}
+
+		quit := make(chan os.Signal, 1)
+		signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			<-quit
+			fmt.Println("\nShutting down...")
+			srv.Shutdown()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			httpServer.Shutdown(ctx)
+		}()
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
 			os.Exit(1)
 		}

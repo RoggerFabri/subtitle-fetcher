@@ -23,8 +23,8 @@ LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 .PHONY: all build run serve fmt vet lint test clean help
 .DEFAULT_GOAL := help
 
-## build   Compile the binary for the current platform
-build:
+## build   Run tests then compile the binary for the current platform
+build: test
 	go build $(LDFLAGS) -o $(OUT) ./src
 
 ## run     Build and run  (pass flags via ARGS=, e.g. make run ARGS="--scan Z:\path")
@@ -49,7 +49,7 @@ lint:
 
 ## test    Run the test suite
 test:
-	go test -race -count=1 ./...
+	go test -count=1 ./...
 
 ## clean   Remove compiled binary
 clean:

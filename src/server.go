@@ -48,6 +48,8 @@ type server struct {
 
 	listeners   map[chan bool]bool
 	listenersMu sync.Mutex
+
+	watcher *mediaWatcher
 }
 
 func newServer(db *sql.DB, root string, workers int) *server {
@@ -58,7 +60,22 @@ func newServer(db *sql.DB, root string, workers int) *server {
 		listeners: make(map[chan bool]bool),
 	}
 	go s.watchWeb()
+
+	if mw, err := newMediaWatcher(s); err != nil {
+		fmt.Printf("[watch] warning: cannot start watcher: %v\n", err)
+	} else {
+		s.watcher = mw
+		fmt.Printf("[watch] starting, scanning %s/{Movies,Series} in background\n", root)
+		mw.Start()
+	}
+
 	return s
+}
+
+func (s *server) Shutdown() {
+	if s.watcher != nil {
+		s.watcher.Stop()
+	}
 }
 
 func (s *server) routes() http.Handler {
