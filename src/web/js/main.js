@@ -80,6 +80,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.app.refreshData();
 });
 
+document.getElementById('picker-modal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) window.app.closePicker();
+});
+document.getElementById('imdb-modal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) window.app.closeImdbPicker();
+});
+
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     window.app.closePicker();
