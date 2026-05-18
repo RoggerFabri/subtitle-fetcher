@@ -14,5 +14,8 @@ export const state = {
   imdbTargetMediaId: null,
   workers: 5,
   fileCache: new Map(),  // mediaId → apiFile[]
-  settingsDirty: false
+  settingsDirty: false,
+  fetchingMediaIds: new Set(),    // mediaId — fetchMedia in progress
+  fetchingSeasonKeys: new Set(),  // "mediaId-season" — fetchSeason in progress
+  fetchingFileIds: new Set()      // fileId — fetchFile in progress
 };

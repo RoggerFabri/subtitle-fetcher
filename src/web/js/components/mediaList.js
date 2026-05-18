@@ -37,6 +37,25 @@ export function toggleSeasonExpand(mediaId, seasonNum, event) {
   renderList();
 }
 
+function restoreFetchingState() {
+  state.fetchingMediaIds.forEach(id => {
+    const btn = document.getElementById(`fetch-media-${id}`);
+    if (btn) { btn.disabled = true; btn.classList.add('fetching'); btn.textContent = '…'; }
+    const card = btn?.closest('.media-card');
+    card?.querySelectorAll('[id^="fetch-season-"], .episode-row .fetch-btn').forEach(b => { b.disabled = true; });
+  });
+  state.fetchingSeasonKeys.forEach(key => {
+    const btn = document.getElementById(`fetch-season-${key}`);
+    if (btn) { btn.disabled = true; btn.classList.add('fetching'); btn.textContent = '…'; }
+    const row = btn?.closest('.season-row');
+    row?.nextElementSibling?.querySelectorAll('.fetch-btn').forEach(b => { b.disabled = true; });
+  });
+  state.fetchingFileIds.forEach(id => {
+    const btn = document.getElementById(`fetch-file-${id}`);
+    if (btn) { btn.disabled = true; btn.classList.add('fetching'); btn.textContent = '…'; }
+  });
+}
+
 export function renderList() {
   const container = document.getElementById('media-list');
   if (!container) return;
@@ -108,6 +127,8 @@ export function renderList() {
       ${isExpanded ? renderMediaBody(m) : ''}
     </div>
   `}).join('');
+
+  restoreFetchingState();
 }
 
 export function renderMediaBody(m) {

@@ -33,6 +33,40 @@ window.app.showTab = function(name) {
   connect();
 })();
 
+const FILTER_KEY = 'sf-filters';
+
+function saveFilterState() {
+  const filters = {};
+  document.querySelectorAll('.pills[data-filter]').forEach(group => {
+    filters[group.dataset.filter] = group.querySelector('.pill.active')?.dataset.value || '';
+  });
+  filters.search = document.getElementById('search')?.value || '';
+  localStorage.setItem(FILTER_KEY, JSON.stringify(filters));
+}
+
+function restoreFilterState() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(FILTER_KEY)); } catch { return; }
+  if (!saved) return;
+
+  if (saved.search) {
+    const searchEl = document.getElementById('search');
+    const searchClear = document.getElementById('search-clear');
+    if (searchEl) searchEl.value = saved.search;
+    if (searchClear) searchClear.classList.toggle('hidden', !saved.search);
+  }
+
+  document.querySelectorAll('.pills[data-filter]').forEach(group => {
+    const val = saved[group.dataset.filter];
+    if (val == null) return;
+    const target = group.querySelector(`.pill[data-value="${val}"]`);
+    if (target) {
+      group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+      target.classList.add('active');
+    }
+  });
+}
+
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-scan')?.addEventListener('click', () => typeof window.app.triggerScan === 'function' && window.app.triggerScan());
@@ -40,11 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-settings-gear')?.addEventListener('click', () => window.app.showTab('settings'));
   document.getElementById('tab-library')?.addEventListener('click', () => window.app.showTab('library'));
   document.getElementById('tab-settings')?.addEventListener('click', () => window.app.showTab('settings'));
-  
+
+  restoreFilterState();
+
   const searchEl = document.getElementById('search');
   const searchClear = document.getElementById('search-clear');
   searchEl?.addEventListener('input', () => {
     searchClear?.classList.toggle('hidden', !searchEl.value);
+    saveFilterState();
     window.app.renderList();
   });
   searchEl?.addEventListener('keydown', (e) => {
@@ -53,16 +90,18 @@ document.addEventListener('DOMContentLoaded', () => {
   searchClear?.addEventListener('click', () => {
     searchEl.value = '';
     searchClear.classList.add('hidden');
+    saveFilterState();
     window.app.renderList();
     searchEl.focus();
   });
-  
+
   document.querySelectorAll('.pills').forEach(group => {
     group.addEventListener('click', e => {
       const pill = e.target.closest('.pill');
       if (!pill) return;
       group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
+      saveFilterState();
       window.app.renderList();
     });
   });

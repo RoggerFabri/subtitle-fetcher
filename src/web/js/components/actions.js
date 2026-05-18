@@ -142,6 +142,7 @@ export async function fetchMedia(id, event) {
   if (event) event.stopPropagation();
   const btn = document.getElementById(`fetch-media-${id}`);
   const name = mediaNameById(id);
+  state.fetchingMediaIds.add(id);
   setFetching(btn, true);
   lockMediaChildren(id);
   try {
@@ -155,6 +156,7 @@ export async function fetchMedia(id, event) {
   } catch (err) {
     showToast(`${name ? `"${name}" — ` : ''}fetch failed`, "error");
   } finally {
+    state.fetchingMediaIds.delete(id);
     setFetching(btn, false);
     unlockMediaChildren(id);
   }
@@ -164,6 +166,8 @@ export async function fetchSeason(id, season, event) {
   if (event) event.stopPropagation();
   const btn = document.getElementById(`fetch-season-${id}-${season}`);
   const name = mediaNameById(id);
+  const seasonKey = `${id}-${season}`;
+  state.fetchingSeasonKeys.add(seasonKey);
   setFetching(btn, true);
   lockSeasonChildren(id, season);
   try {
@@ -177,6 +181,7 @@ export async function fetchSeason(id, season, event) {
   } catch (err) {
     showToast(`${name ? `"${name}" S${season}` : `Season ${season}`} — fetch failed`, "error");
   } finally {
+    state.fetchingSeasonKeys.delete(seasonKey);
     setFetching(btn, false);
     unlockSeasonChildren(id, season);
   }
@@ -203,6 +208,7 @@ export async function fetchFile(id, event) {
   if (event) event.stopPropagation();
   const btn = document.getElementById(`fetch-file-${id}`);
   const info = fileInfoById(id);
+  state.fetchingFileIds.add(id);
   const label = info
     ? `"${info.media.name || info.media.Name}"${info.file.episode != null ? ` E${String(info.file.episode).padStart(2,'0')}` : ''}`
     : 'file';
@@ -221,6 +227,7 @@ export async function fetchFile(id, event) {
   } catch (err) {
     showToast(`${label} — fetch failed`, "error");
   } finally {
+    state.fetchingFileIds.delete(id);
     if (btn) {
       btn.classList.remove('fetching');
       btn.disabled = false;
