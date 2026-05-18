@@ -47,15 +47,13 @@ func newMediaWatcher(s *server) (*mediaWatcher, error) {
 
 func (w *mediaWatcher) Start() {
 	go w.loop()
-	go func() {
-		if err := w.watcher.Add(w.s.root); err != nil {
-			fmt.Printf("[watch] warn: cannot watch root %s: %v\n", w.s.root, err)
-		}
-		for _, sub := range []string{"Movies", "Series"} {
-			w.addDirTree(filepath.Join(w.s.root, sub))
-		}
-		fmt.Printf("[watch] ready\n")
-	}()
+	// Only watch the root itself so newly created Movies/ or Series/ directories
+	// are picked up. Skip the recursive addDirTree walk — it traverses the entire
+	// media library over the network mount on startup, competing with the scanner.
+	if err := w.watcher.Add(w.s.root); err != nil {
+		fmt.Printf("[watch] warn: cannot watch root %s: %v\n", w.s.root, err)
+	}
+	fmt.Printf("[watch] ready\n")
 }
 
 func (w *mediaWatcher) Stop() {

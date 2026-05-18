@@ -11,5 +11,6 @@ export const state = {
   pickerFileId: null,
   pickerCandidates: [],
   imdbSearchTimer: null,
-  imdbTargetMediaId: null
+  imdbTargetMediaId: null,
+  workers: 5
 };

@@ -18,6 +18,7 @@ import (
 // Setting keys — every provider's credentials are consistently prefixed.
 const (
 	settingProviderOrder = "provider_order"
+	settingWorkers       = "workers"
 
 	// OpenSubtitles keys (renamed from bare "username"/"password"/"api_key")
 	settingOSEnabled  = "opensubtitles_enabled"
@@ -37,7 +38,7 @@ const (
 type server struct {
 	db      *sql.DB
 	root    string
-	workers int
+	workers atomic.Int32
 
 	scanMu       sync.Mutex
 	scanning     atomic.Bool
@@ -56,9 +57,15 @@ func newServer(db *sql.DB, root string, workers int) *server {
 	s := &server{
 		db:        db,
 		root:      root,
-		workers:   workers,
 		listeners: make(map[chan bool]bool),
 	}
+	// DB-stored value takes precedence over the CLI flag.
+	if stored := getSetting(db, settingWorkers); stored != "" {
+		if n, err := strconv.Atoi(stored); err == nil && n >= 1 && n <= 50 {
+			workers = n
+		}
+	}
+	s.workers.Store(int32(workers))
 	go s.watchWeb()
 
 	if mw, err := newMediaWatcher(s); err != nil {
@@ -337,6 +344,7 @@ func providerDefaults() map[string]string {
 		settingOSEnabled:     "1",
 		settingSubDLEnabled:  "1",
 		settingWyzieEnabled:  "1",
+		settingWorkers:       "5",
 	}
 }
 
@@ -378,6 +386,8 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		providers[name] = p
 	}
 	providers[settingProviderOrder] = order
+	workers := int(s.workers.Load())
+	providers["workers"] = workers
 
 	jsonOK(w, providers)
 }
@@ -394,6 +404,15 @@ func (s *server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		jsonError(w, "invalid body", http.StatusBadRequest)
 		return
+	}
+
+	// Workers
+	if raw, ok := body["workers"]; ok {
+		var n int
+		if err := json.Unmarshal(raw, &n); err == nil && n >= 1 && n <= 50 {
+			setSetting(s.db, settingWorkers, strconv.Itoa(n))
+			s.workers.Store(int32(n))
+		}
 	}
 
 	// Provider order
@@ -504,6 +523,11 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 	for k, v := range doc.Settings {
 		if err := setSetting(s.db, k, v); err == nil {
 			settingsApplied++
+			if k == settingWorkers {
+				if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 50 {
+					s.workers.Store(int32(n))
+				}
+			}
 		}
 	}
 
@@ -833,7 +857,7 @@ func (s *server) fetchSubtitlesForFiles(files []apiFile, media apiMedia) map[str
 	var mu sync.Mutex
 	var ok, failed int
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, s.workers)
+	sem := make(chan struct{}, s.workers.Load())
 
 	for _, f := range files {
 		if f.HasSubtitle {

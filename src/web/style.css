@@ -218,6 +218,26 @@ main { padding: 24px; }
 
 .hidden { display: none !important; }
 
+/* ─── General settings section ─── */
+
+.settings-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 16px;
+}
+.settings-section-title {
+  font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em;
+  margin-bottom: 12px;
+}
+.settings-section .provider-field-row {
+  flex-direction: row; align-items: center; gap: 12px; margin-bottom: 0;
+}
+.settings-section .provider-field-row label {
+  width: 160px; flex-shrink: 0;
+}
+.settings-section .provider-field-row input[type="number"] {
+  width: 70px;
+}
+
 /* ─── Provider cards ─── */
 
 .provider-card {

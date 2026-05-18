@@ -45,7 +45,8 @@ func newTestWatcher(t *testing.T, root string, db *sql.DB, fetchFn func([]apiFil
 	if err != nil {
 		t.Fatalf("fsnotify.NewWatcher: %v", err)
 	}
-	srv := &server{db: db, root: root, workers: 1}
+	srv := &server{db: db, root: root}
+	srv.workers.Store(1)
 	mw := &mediaWatcher{
 		s:        srv,
 		watcher:  fw,

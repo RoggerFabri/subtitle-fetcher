@@ -9,6 +9,10 @@ export function loadSettings(s) {
     state.providerOrder = s.provider_order;
   }
 
+  if (typeof s.workers === 'number' && s.workers >= 1) {
+    state.workers = s.workers;
+  }
+
   for (const name of state.providerOrder) {
     if (s[name]) {
       if (s[name].enabled !== undefined) {
@@ -24,8 +28,20 @@ export function renderSettings() {
   const container = document.getElementById('provider-list');
   if (!container) return;
 
+  const generalHtml = `
+    <div class="settings-section">
+      <div class="settings-section-title">General</div>
+      <div class="provider-field-row">
+        <label>Parallel workers</label>
+        <input type="number" min="1" max="50" value="${state.workers}"
+          style="width:70px"
+          oninput="window.app.state.workers = Math.max(1, Math.min(50, parseInt(this.value)||1)); window.app.saveAllProviders();">
+      </div>
+    </div>
+  `;
+
   const lastIdx = state.providerOrder.length - 1;
-  container.innerHTML = state.providerOrder.map((name, index) => {
+  const providersHtml = state.providerOrder.map((name, index) => {
     const isEnabled = state.providerEnabled[name];
     if (!state.providerFields[name]) state.providerFields[name] = {};
     const fields = state.providerFields[name];
@@ -89,6 +105,8 @@ export function renderSettings() {
       </div>
     `;
   }).join('');
+
+  container.innerHTML = generalHtml + providersHtml;
 }
 
 export function moveProvider(name, dir) {
@@ -100,7 +118,7 @@ export function moveProvider(name, dir) {
 }
 
 export async function saveAllProviders() {
-  const payload = { provider_order: state.providerOrder };
+  const payload = { provider_order: state.providerOrder, workers: state.workers };
   state.providerOrder.forEach(name => {
     payload[name] = { 
       ...state.providerFields[name], 
