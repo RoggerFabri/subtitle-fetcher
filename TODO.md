@@ -2,7 +2,7 @@
 
 ## High priority
 
-- [ ] **Watcher polling fallback** — inotify does not work over SMB/NFS (NAS mounts). Add a configurable polling interval (e.g. every 30 min) that scans for new files without subtitles, making auto-fetch actually useful for network-mounted libraries.
+- [x] **Watcher polling fallback** — inotify does not work over SMB/NFS (NAS mounts). Add a configurable polling interval (e.g. every 30 min) that scans for new files without subtitles, making auto-fetch actually useful for network-mounted libraries.
 - [ ] **Bulk "Fetch All Missing"** — a single button to queue every file across the whole library that lacks a subtitle, respecting the worker semaphore. Currently requires clicking per media item.
 - [ ] **Subtitle language preference** — allow users to set a preferred language (+ optional fallback). Currently hardcoded to English, making the service unusable for non-English libraries.
 
