@@ -236,8 +236,27 @@ func (p *wyzieProvider) search(imdbID string, season, episode int, hasSE bool) (
 		// Wyzie returns 400 "No subtitles found" instead of 200+empty array.
 		return nil, nil
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("search failed %d (url=%s): %s", resp.StatusCode, u.String(), body)
+	if resp.StatusCode == 403 || resp.StatusCode == 429 || resp.StatusCode == 503 {
+		// Wyzie occasionally returns 403 as a transient throttle signal.
+		// Wait and retry once before giving up.
+		fmt.Printf("[wyzie] server returned %d, waiting 5s and retrying…\n", resp.StatusCode)
+		time.Sleep(5 * time.Second)
+		req2, _ := http.NewRequest("GET", u.String(), nil)
+		req2.Header.Set("Accept", "application/json")
+		resp2, err2 := p.hc.Do(req2)
+		if err2 != nil {
+			return nil, fmt.Errorf("retry request failed: %w", err2)
+		}
+		defer resp2.Body.Close()
+		body, _ = io.ReadAll(resp2.Body)
+		if resp2.StatusCode == 400 {
+			return nil, nil
+		}
+		if resp2.StatusCode < 200 || resp2.StatusCode >= 300 {
+			return nil, fmt.Errorf("search failed %d (url=%s): %s", resp2.StatusCode, maskURL, body)
+		}
+	} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("search failed %d (url=%s): %s", resp.StatusCode, maskURL, body)
 	}
 
 	var results []map[string]any

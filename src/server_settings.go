@@ -5,7 +5,29 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// shortDuration formats a duration as a compact string without trailing zero
+// components (e.g. 30m instead of 30m0s, 1h instead of 1h0m0s).
+func shortDuration(d time.Duration) string {
+	if d == 0 {
+		return "0"
+	}
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	switch {
+	case h > 0 && m == 0 && s == 0:
+		return strconv.Itoa(h) + "h"
+	case h > 0 && s == 0:
+		return strconv.Itoa(h) + "h" + strconv.Itoa(m) + "m"
+	case h == 0 && s == 0:
+		return strconv.Itoa(m) + "m"
+	default:
+		return d.String()
+	}
+}
 
 func providerDefaults() map[string]string {
 	return map[string]string{
@@ -14,6 +36,7 @@ func providerDefaults() map[string]string {
 		settingSubDLEnabled:  "1",
 		settingWyzieEnabled:  "1",
 		settingWorkers:       "5",
+		settingAutoScanInterval:  "0",
 	}
 }
 
@@ -51,6 +74,19 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	providers[settingProviderOrder] = order
 	workers := int(s.workers.Load())
 	providers["workers"] = workers
+	s.pollerMu.Lock()
+	activeInterval := "0"
+	if s.poller != nil {
+		// Prefer the DB-stored string (user-facing form like "30m") if set;
+		// fall back to formatting the live duration for CLI/env-sourced values.
+		if stored := getSetting(s.db, settingAutoScanInterval); stored != "" && stored != "0" {
+			activeInterval = stored
+		} else {
+			activeInterval = shortDuration(s.poller.interval)
+		}
+	}
+	s.pollerMu.Unlock()
+	providers["auto_scan_interval"] = activeInterval
 
 	jsonOK(w, providers)
 }
@@ -75,6 +111,20 @@ func (s *server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		if err := json.Unmarshal(raw, &n); err == nil && n >= 1 && n <= 50 {
 			setSetting(s.db, settingWorkers, strconv.Itoa(n))
 			s.workers.Store(int32(n))
+		}
+	}
+
+	// Poll interval
+	if raw, ok := body["auto_scan_interval"]; ok {
+		var v string
+		if err := json.Unmarshal(raw, &v); err == nil {
+			if v == "0" || v == "" {
+				setSetting(s.db, settingAutoScanInterval, "0")
+				s.updatePoller(0)
+			} else if d, err := time.ParseDuration(v); err == nil && d >= time.Minute {
+				setSetting(s.db, settingAutoScanInterval, v)
+				s.updatePoller(d)
+			}
 		}
 	}
 

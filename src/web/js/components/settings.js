@@ -13,6 +13,10 @@ export function loadSettings(s) {
     state.workers = s.workers;
   }
 
+  if (typeof s.auto_scan_interval === 'string') {
+    state.autoScanInterval = s.auto_scan_interval;
+  }
+
   for (const name of state.providerOrder) {
     if (s[name]) {
       if (s[name].enabled !== undefined) {
@@ -41,6 +45,15 @@ export function renderSettings() {
   const container = document.getElementById('provider-list');
   if (!container) return;
 
+  const pollOptions = ['0', '15m', '30m', '1h', '2h', '6h', '12h', '24h'];
+  const pollLabels = { '0': 'Disabled', '15m': '15 minutes', '30m': '30 minutes', '1h': '1 hour', '2h': '2 hours', '6h': '6 hours', '12h': '12 hours', '24h': '24 hours' };
+  if (state.autoScanInterval && state.autoScanInterval !== '0' && !pollOptions.includes(state.autoScanInterval)) {
+    pollOptions.splice(1, 0, state.autoScanInterval); // insert after Disabled
+  }
+  const pollSelectOptions = pollOptions.map(v =>
+    `<option value="${v}" ${state.autoScanInterval === v ? 'selected' : ''}>${pollLabels[v] || v}</option>`
+  ).join('');
+
   const generalHtml = `
     <div class="settings-section">
       <div class="settings-section-title">General</div>
@@ -49,6 +62,12 @@ export function renderSettings() {
         <input type="number" min="1" max="50" value="${state.workers}"
           style="width:70px"
           onchange="window.app.state.workers = Math.max(1, Math.min(50, parseInt(this.value)||1)); this.value = window.app.state.workers; window.app.saveAllProviders();">
+      </div>
+      <div class="provider-field-row">
+        <label title="Periodically scans for new files and fetches missing subtitles. Useful for NAS/SMB mounts where inotify does not work.">Auto-scan interval</label>
+        <select onchange="window.app.state.autoScanInterval = this.value; window.app.saveAllProviders();">
+          ${pollSelectOptions}
+        </select>
       </div>
     </div>
   `;
@@ -64,6 +83,8 @@ export function renderSettings() {
     const isEnabled = state.providerEnabled[name];
     if (!state.providerFields[name]) state.providerFields[name] = {};
     const fields = state.providerFields[name];
+
+    const providerDisplayNames = { opensubtitles: 'OpenSubtitles', subdl: 'SubDL', wyzie: 'Wyzie' };
 
     const dirty = "window.app.markDirty()";
     let fieldsHtml = '';
@@ -107,7 +128,7 @@ export function renderSettings() {
           <span class="provider-rank">${index + 1}</span>
           <span class="provider-name" style="cursor: pointer; display: flex; align-items: center;" onclick="this.closest('.provider-card').classList.toggle('expanded')">
             <span class="chevron" style="display:inline-block; width: 14px;">▸</span>
-            ${name}
+            ${providerDisplayNames[name] || name}
           </span>
           <div class="provider-actions">
             <button class="btn-sm" onclick="window.app.moveProvider('${name}', -1)" ${index === 0 ? 'disabled' : ''} title="Move up">↑</button>
@@ -139,7 +160,7 @@ export function moveProvider(name, dir) {
 }
 
 export async function saveAllProviders() {
-  const payload = { provider_order: state.providerOrder, workers: state.workers };
+  const payload = { provider_order: state.providerOrder, workers: state.workers, auto_scan_interval: state.autoScanInterval };
   state.providerOrder.forEach(name => {
     payload[name] = { 
       ...state.providerFields[name], 

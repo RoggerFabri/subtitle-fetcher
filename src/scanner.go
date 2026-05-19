@@ -50,7 +50,7 @@ func runScan(root string) error {
 	digits := func(total int) string { return strconv.Itoa(total) }
 	_ = digits
 
-	return runScanDB(context.Background(), db, root, func(done, total int, name string) {
+	return runScanDB(context.Background(), db, root, 0, func(done, total int, name string) {
 		fmt.Printf("\r  [%*d/%d] %-55s", len(strconv.Itoa(total)), done, total, truncate(name, 55))
 	}, func() { fmt.Println() }, true)
 }
@@ -62,12 +62,20 @@ func runScanWithProgress(ctx context.Context, root string, statusFn func(string,
 		return err
 	}
 	defer db.Close()
-	return runScanDB(ctx, db, root, func(done, total int, name string) {
+	return runScanDB(ctx, db, root, 0, func(done, total int, name string) {
 		statusFn(fmt.Sprintf("[%d/%d] %s", done, total, name), done, total)
 	}, func() {}, false)
 }
 
-func runScanDB(ctx context.Context, db *sql.DB, root string, progressFn func(done, total int, name string), doneFn func(), printReport bool) error {
+// runScanWithProgressDB is like runScanWithProgress but reuses an existing DB
+// connection and accepts a explicit worker count (0 = use default NumCPU*2).
+func runScanWithProgressDB(ctx context.Context, db *sql.DB, root string, scanWorkers int, statusFn func(string, int, int)) error {
+	return runScanDB(ctx, db, root, scanWorkers, func(done, total int, name string) {
+		statusFn(fmt.Sprintf("[%d/%d] %s", done, total, name), done, total)
+	}, func() {}, false)
+}
+
+func runScanDB(ctx context.Context, db *sql.DB, root string, scanWorkers int, progressFn func(done, total int, name string), doneFn func(), printReport bool) error {
 	entries := collectEntries(
 		filepath.Join(root, "Movies"),
 		filepath.Join(root, "Series"),
@@ -78,9 +86,12 @@ func runScanDB(ctx context.Context, db *sql.DB, root string, progressFn func(don
 		return nil
 	}
 
-	workers := runtime.NumCPU() * 2
+	workers := scanWorkers
 	if workers < 4 {
-		workers = 4
+		workers = runtime.NumCPU() * 2
+		if workers < 4 {
+			workers = 4
+		}
 	}
 
 	jobs := make(chan scanEntry, total)

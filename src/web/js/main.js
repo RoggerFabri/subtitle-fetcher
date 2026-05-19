@@ -117,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial data load
   window.app.refreshData();
+
+  // Background monitor for poller-triggered scans
+  window.app.startAutoScanMonitor();
 });
 
 document.getElementById('picker-modal')?.addEventListener('click', e => {

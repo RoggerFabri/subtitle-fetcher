@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Setting keys — every provider's credentials are consistently prefixed.
@@ -27,6 +28,8 @@ const (
 	// Wyzie keys
 	settingWyzieEnabled = "wyzie_enabled"
 	settingWyzieApiKey  = "wyzie_api_key"
+
+	settingAutoScanInterval = "auto_scan_interval"
 )
 
 type server struct {
@@ -37,6 +40,7 @@ type server struct {
 	scanMu       sync.Mutex
 	scanning     atomic.Bool
 	scanStatus   string
+	scanSource   string // "manual" | "poll"
 	scanStatusMu sync.RWMutex
 	scanCurrent  atomic.Int64
 	scanTotal    atomic.Int64
@@ -46,6 +50,9 @@ type server struct {
 
 	watcher *mediaWatcher
 
+	poller   *mediaPoller
+	pollerMu sync.Mutex
+
 	osProvider   *openSubtitlesProvider
 	osProviderMu sync.Mutex
 
@@ -53,7 +60,7 @@ type server struct {
 	cancel context.CancelFunc
 }
 
-func newServer(db *sql.DB, root string, workers int) *server {
+func newServer(db *sql.DB, root string, workers int, autoScanInterval time.Duration) *server {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &server{
 		db:        db,
@@ -75,6 +82,18 @@ func newServer(db *sql.DB, root string, workers int) *server {
 		}
 	}
 	s.workers.Store(int32(workers))
+
+	// DB-stored poll interval takes precedence over CLI flag.
+	if stored := getSetting(db, settingAutoScanInterval); stored != "" && stored != "0" {
+		if d, err := time.ParseDuration(stored); err == nil && d >= time.Minute {
+			autoScanInterval = d
+		}
+	}
+	if autoScanInterval >= time.Minute {
+		s.poller = newMediaPoller(s, autoScanInterval)
+		s.poller.Start()
+	}
+
 	go s.watchWeb()
 
 	if mw, err := newMediaWatcher(s); err != nil {
@@ -93,10 +112,29 @@ func (s *server) Shutdown() {
 	if s.watcher != nil {
 		s.watcher.Stop()
 	}
+	s.pollerMu.Lock()
+	if s.poller != nil {
+		s.poller.Stop()
+		s.poller = nil
+	}
+	s.pollerMu.Unlock()
 	s.osProviderMu.Lock()
 	if s.osProvider != nil {
 		s.osProvider.Logout()
 		s.osProvider = nil
 	}
 	s.osProviderMu.Unlock()
+}
+
+func (s *server) updatePoller(interval time.Duration) {
+	s.pollerMu.Lock()
+	defer s.pollerMu.Unlock()
+	if s.poller != nil {
+		s.poller.Stop()
+		s.poller = nil
+	}
+	if interval >= time.Minute {
+		s.poller = newMediaPoller(s, interval)
+		s.poller.Start()
+	}
 }

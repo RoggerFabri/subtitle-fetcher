@@ -315,6 +315,31 @@ export async function autoIMDB() {
   if (btn) { btn.disabled = false; btn.textContent = 'Auto IMDB'; btn.title = ''; }
 }
 
+export function startAutoScanMonitor() {
+  setInterval(async () => {
+    if (state.isScanning) return; // manual scan in progress, it handles its own UI
+    let sData;
+    try { sData = await api.apiGetScanStatus(); } catch { return; }
+
+    if (sData.running && sData.source === 'autoscan' && !state.autoScanActive) {
+      state.autoScanActive = true;
+      state.isScanning = true;
+      const btn = document.getElementById('btn-scan');
+      if (btn) { btn.disabled = true; btn.textContent = 'Auto-scan…'; }
+      showToast('Auto-scan started', 'info');
+    }
+
+    if (state.autoScanActive && !sData.running) {
+      state.autoScanActive = false;
+      state.isScanning = false;
+      const btn = document.getElementById('btn-scan');
+      if (btn) { btn.disabled = false; btn.textContent = '⟳ Scan'; }
+      showToast('Auto-scan completed', 'success');
+      await refreshMediaAndStats();
+    }
+  }, 5000);
+}
+
 export function mediaNameById(id) {
   const m = (state.mediaData || []).find(m => (m.id || m.Id) === id);
   return m ? (m.name || m.Name || null) : null;

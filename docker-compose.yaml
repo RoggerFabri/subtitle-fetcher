@@ -11,6 +11,9 @@ services:
       - PORT=8080
       # Tells the application to store its database here instead of the binary directory
       - DB_PATH=/app/data
+      # Optional: auto-scan interval (e.g. 30m, 1h). Scans for new files and fetches
+      # missing subtitles. Useful for NAS/SMB mounts where inotify does not work.
+      # - AUTO_SCAN_INTERVAL=30m
     volumes:
       # Bind mount the directory to serve.
       # Replace "Z:\Shared\Downloads" with the actual path you want to scan/serve.

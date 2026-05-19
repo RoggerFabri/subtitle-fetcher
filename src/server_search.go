@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *server) handleSearchFile(w http.ResponseWriter, r *http.Request) {
@@ -62,9 +63,14 @@ func (s *server) handleSearchFile(w http.ResponseWriter, r *http.Request) {
 		}(p)
 	}
 
+	timeout := time.After(15 * time.Second)
 	var all []SubtitleCandidate
 	for range providers {
-		all = append(all, <-ch...)
+		select {
+		case c := <-ch:
+			all = append(all, c...)
+		case <-timeout:
+		}
 	}
 
 	// Sort by downloads descending.

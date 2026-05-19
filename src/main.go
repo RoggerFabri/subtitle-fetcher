@@ -36,7 +36,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer db.Close()
-		srv := newServer(db, cfg.ServeRoot, cfg.Workers)
+		srv := newServer(db, cfg.ServeRoot, cfg.Workers, cfg.AutoScanInterval)
 		addr := fmt.Sprintf(":%d", cfg.Port)
 		fmt.Printf("Serving at http://localhost%s\n", addr)
 		fmt.Printf("Root:     %s\n", cfg.ServeRoot)
@@ -46,7 +46,15 @@ func main() {
 			dbDir = env
 		}
 		fmt.Printf("Database: %s\n", filepath.Join(dbDir, "subtitles.db"))
-		fmt.Printf("Workers:  %d\n\n", srv.workers.Load())
+		fmt.Printf("Workers:  %d\n", srv.workers.Load())
+		srv.pollerMu.Lock()
+		if srv.poller != nil {
+			fmt.Printf("Poll:     every %s\n", srv.poller.interval)
+		} else {
+			fmt.Printf("Poll:     disabled\n")
+		}
+		srv.pollerMu.Unlock()
+		fmt.Println()
 		httpServer := &http.Server{Addr: addr, Handler: srv.routes()}
 
 		quit := make(chan os.Signal, 1)
