@@ -35,6 +35,8 @@ type fileResult struct {
 type scanResult struct {
 	entry   scanEntry
 	files   []fileResult
+	sig     string // directory signature captured this scan (empty when skipped)
+	skipped bool   // true when the folder was unchanged and not re-read
 	scanErr error
 }
 
@@ -86,13 +88,20 @@ func runScanDB(ctx context.Context, db *sql.DB, root string, scanWorkers int, pr
 		return nil
 	}
 
-	workers := scanWorkers
-	if workers < 4 {
-		workers = runtime.NumCPU() * 2
-		if workers < 4 {
-			workers = 4
-		}
+	// Scanning is network-I/O bound: workers spend almost all their time
+	// blocked on ReadDir/stat round-trips over SMB/NFS, so we oversubscribe well
+	// past the core count to overlap that latency. This floor is independent of
+	// the download-oriented worker setting (which is far lower by default).
+	floor := runtime.NumCPU() * 2
+	if floor < 16 {
+		floor = 16
 	}
+	workers := scanWorkers
+	if workers < floor {
+		workers = floor
+	}
+
+	priorSigs, priorFilesByMedia := loadPriorScanState(db)
 
 	jobs := make(chan scanEntry, total)
 	results := make(chan scanResult, workers)
@@ -103,7 +112,7 @@ func runScanDB(ctx context.Context, db *sql.DB, root string, scanWorkers int, pr
 		go func() {
 			defer wg.Done()
 			for e := range jobs {
-				results <- scanEntryFS(e)
+				results <- scanEntryFS(e, priorSigs)
 			}
 		}()
 	}
@@ -132,6 +141,14 @@ func runScanDB(ctx context.Context, db *sql.DB, root string, scanWorkers int, pr
 			continue
 		}
 		seenMedia[r.entry.dir] = true
+		if r.skipped {
+			// Folder unchanged since last scan — keep its rows and mark its
+			// known files as seen so pruneStale doesn't delete them.
+			for _, p := range priorFilesByMedia[r.entry.dir] {
+				seenFiles[p] = true
+			}
+			continue
+		}
 		for _, f := range r.files {
 			seenFiles[f.path] = true
 		}
@@ -178,72 +195,113 @@ func collectEntries(moviesDir, seriesDir string) []scanEntry {
 	return entries
 }
 
-// scanEntryFS reads the filesystem only — no DB access.
-func scanEntryFS(e scanEntry) scanResult {
+// scanEntryFS reads the filesystem only — no DB access. When the folder's
+// current directory signature matches priorSigs (i.e. nothing was added or
+// removed since the last scan), it returns skipped=true without reading the
+// (potentially large, network-bound) folder contents.
+func scanEntryFS(e scanEntry, priorSigs map[string]string) scanResult {
+	prior := priorSigs[e.dir]
 	var files []fileResult
+	var sig string
+	var skipped bool
 	var scanErr error
 
 	switch e.typ {
 	case "movie":
-		files, scanErr = scanMovieFS(e.dir)
+		files, sig, skipped, scanErr = scanMovieFS(e.dir, prior)
 	case "series":
-		files, scanErr = scanSeriesFS(e.dir)
+		files, sig, skipped, scanErr = scanSeriesFS(e.dir, prior)
 	}
-	return scanResult{entry: e, files: files, scanErr: scanErr}
+	return scanResult{entry: e, files: files, sig: sig, skipped: skipped, scanErr: scanErr}
 }
 
-func scanMovieFS(dir string) ([]fileResult, error) {
+// dirSig formats a directory's mtime into a comparable signature token.
+func dirSig(info os.FileInfo) string {
+	return strconv.FormatInt(info.ModTime().UnixNano(), 10)
+}
+
+// scanMovieFS reads a movie folder. The signature is the folder's own mtime,
+// which changes whenever a video or subtitle file is added or removed.
+func scanMovieFS(dir, priorSig string) ([]fileResult, string, bool, error) {
+	di, err := os.Stat(dir)
+	if err != nil {
+		return nil, "", false, err
+	}
+	sig := dirSig(di)
+	if priorSig != "" && priorSig == sig {
+		return nil, sig, true, nil
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, err
+		return nil, "", false, err
 	}
+	names := dirEntryNameSet(entries)
 	var files []fileResult
 	for _, e := range entries {
 		if e.IsDir() || !videoExts[strings.ToLower(filepath.Ext(e.Name()))] {
 			continue
 		}
-		path := filepath.Join(dir, e.Name())
-		sp := subtitlePath(path)
-		subName := ""
-		if sp != "" {
-			subName = filepath.Base(sp)
-		}
-		files = append(files, fileResult{path: path, hasSubtitle: sp != "", subtitleName: subName})
+		subName := subtitleNameFor(e.Name(), names)
+		files = append(files, fileResult{
+			path:         filepath.Join(dir, e.Name()),
+			hasSubtitle:  subName != "",
+			subtitleName: subName,
+		})
 	}
-	return files, nil
+	return files, sig, false, nil
 }
 
-func scanSeriesFS(dir string) ([]fileResult, error) {
+// scanSeriesFS reads a series folder. A series' files live one level deeper, in
+// season folders, so the show-root mtime alone is not enough — adding an
+// episode changes the season folder's mtime, not the show root's. The signature
+// is therefore composed from every season folder's name and mtime, which also
+// captures whole seasons being added, removed, or renamed.
+func scanSeriesFS(dir, priorSig string) ([]fileResult, string, bool, error) {
 	seasons, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, err
+		return nil, "", false, err
 	}
-	var files []fileResult
+
+	type seasonDir struct{ name, path string }
+	var sdirs []seasonDir
+	var sigParts []string
 	for _, s := range seasons {
 		if !s.IsDir() {
 			continue
 		}
-		seasonNum := parseSeasonFromFolder(s.Name())
-		seasonDir := filepath.Join(dir, s.Name())
+		mt := ""
+		if info, err := s.Info(); err == nil {
+			mt = dirSig(info)
+		}
+		sigParts = append(sigParts, s.Name()+"="+mt)
+		sdirs = append(sdirs, seasonDir{name: s.Name(), path: filepath.Join(dir, s.Name())})
+	}
+	sort.Strings(sigParts)
+	sig := strings.Join(sigParts, ";")
+	if priorSig != "" && priorSig == sig {
+		return nil, sig, true, nil
+	}
 
-		eps, err := os.ReadDir(seasonDir)
+	var files []fileResult
+	for _, sd := range sdirs {
+		seasonNum := parseSeasonFromFolder(sd.name)
+
+		eps, err := os.ReadDir(sd.path)
 		if err != nil {
 			continue
 		}
+		names := dirEntryNameSet(eps)
 		for _, fe := range eps {
 			if fe.IsDir() || !videoExts[strings.ToLower(filepath.Ext(fe.Name()))] {
 				continue
 			}
-			path := filepath.Join(seasonDir, fe.Name())
+			path := filepath.Join(sd.path, fe.Name())
 			stem := strings.TrimSuffix(fe.Name(), filepath.Ext(fe.Name()))
 			_, ep, hasSE := parseSeasonEpisode(stem)
 
-			sp := subtitlePath(path)
-			subName := ""
-			if sp != "" {
-				subName = filepath.Base(sp)
-			}
-			fr := fileResult{path: path, hasSubtitle: sp != "", subtitleName: subName}
+			subName := subtitleNameFor(fe.Name(), names)
+			fr := fileResult{path: path, hasSubtitle: subName != "", subtitleName: subName}
 			if seasonNum >= 0 {
 				sn := seasonNum
 				fr.season = &sn
@@ -254,20 +312,62 @@ func scanSeriesFS(dir string) ([]fileResult, error) {
 			files = append(files, fr)
 		}
 	}
-	return files, nil
+	return files, sig, false, nil
+}
+
+// loadPriorScanState reads, in one pass each, the per-media directory
+// signatures and the file paths known from the previous scan. The signatures
+// drive the incremental skip; the file map lets the result loop mark a skipped
+// folder's files as still-present so they survive pruning.
+func loadPriorScanState(db *sql.DB) (sigs map[string]string, filesByMedia map[string][]string) {
+	sigs = make(map[string]string)
+	filesByMedia = make(map[string][]string)
+
+	if rows, err := db.Query(`SELECT path, scan_sig FROM media`); err == nil {
+		for rows.Next() {
+			var path, sig string
+			if rows.Scan(&path, &sig) == nil {
+				sigs[path] = sig
+			}
+		}
+		rows.Close()
+	}
+
+	if rows, err := db.Query(`SELECT m.path, f.path FROM media m JOIN files f ON f.media_id = m.id`); err == nil {
+		for rows.Next() {
+			var mPath, fPath string
+			if rows.Scan(&mPath, &fPath) == nil {
+				filesByMedia[mPath] = append(filesByMedia[mPath], fPath)
+			}
+		}
+		rows.Close()
+	}
+	return sigs, filesByMedia
 }
 
 func writeResultToDB(db *sql.DB, r scanResult) error {
-	mediaID, err := upsertMedia(db, r.entry.dir, r.entry.name, r.entry.typ)
+	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
+	mediaID, err := upsertMedia(tx, r.entry.dir, r.entry.name, r.entry.typ)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	// Persist the directory signature so the next scan can skip this folder if
+	// nothing changes on disk.
+	if _, err := tx.Exec(`UPDATE media SET scan_sig = ? WHERE id = ?`, r.sig, mediaID); err != nil {
+		tx.Rollback()
+		return err
+	}
 	for _, f := range r.files {
-		if err := upsertFile(db, mediaID, f.path, f.season, f.episode, f.hasSubtitle, f.subtitleName); err != nil {
+		if err := upsertFile(tx, mediaID, f.path, f.season, f.episode, f.hasSubtitle, f.subtitleName); err != nil {
+			tx.Rollback()
 			return err
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // parseSeasonFromFolder returns the season number for known patterns,

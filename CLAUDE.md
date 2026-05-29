@@ -71,9 +71,22 @@ docker-compose.yaml
 
 Stored in `data/` next to the binary by default. Override with `DB_PATH` env var (used by Docker to point at the mounted volume).
 
-- `media(id, path, name, type, imdb_id, last_scanned)` — one row per movie/series folder
+- `media(id, path, name, type, imdb_id, last_scanned, scan_sig)` — one row per movie/series folder
 - `files(id, media_id, path, season, episode, has_subtitle, subtitle_name, last_seen)` — one row per video file
 - `settings(key, value)` — provider credentials, order, toggles
+
+### Incremental scanning
+
+`scanner.go` skips folders whose contents are unchanged since the last scan. Each media folder stores a directory signature in `media.scan_sig`:
+
+- **Movie:** the folder's own mtime (changes when a video/subtitle is added or removed).
+- **Series:** a composite of every season folder's name + mtime (the show-root mtime alone misses episode-level changes one level down).
+
+On rescan, `scanEntryFS` computes the current signature and, if it matches `scan_sig`, returns `skipped` without reading the (network-bound) folder contents. Skipped folders still have their known file paths re-marked as "seen" via `loadPriorScanState` so `pruneStale` doesn't delete them. The signature relies on the filesystem updating directory mtime on entry add/remove (standard POSIX / CIFS / NFS behavior).
+
+Subtitle sidecars are detected from the directory listing (`dirEntryNameSet` + `subtitleNameFor`), not per-file `os.Stat` calls — important over SMB/NFS where each stat is a round-trip.
+
+Scan worker count has an I/O-bound floor (`max(NumCPU*2, 16)`) independent of the download-oriented `workers` setting, since scan workers spend most of their time blocked on filesystem round-trips.
 
 ### Subtitle provider interface
 

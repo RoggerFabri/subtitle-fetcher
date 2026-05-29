@@ -44,6 +44,35 @@ func subtitlePath(videoPath string) string {
 	return ""
 }
 
+// dirEntryNameSet maps each non-directory entry's lowercased name to its
+// original name. Building this once from a ReadDir result lets the scanner
+// detect subtitle sidecars with a map lookup instead of one os.Stat per
+// candidate extension — a large win on network-mounted libraries where every
+// stat is a round-trip.
+func dirEntryNameSet(entries []os.DirEntry) map[string]string {
+	names := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		names[strings.ToLower(e.Name())] = e.Name()
+	}
+	return names
+}
+
+// subtitleNameFor returns the sidecar subtitle base name for videoName, looked
+// up case-insensitively against names (from dirEntryNameSet), or "" if none.
+func subtitleNameFor(videoName string, names map[string]string) string {
+	ext := filepath.Ext(videoName)
+	stem := strings.ToLower(videoName[:len(videoName)-len(ext)])
+	for _, sext := range subtitleExts {
+		if actual, ok := names[stem+sext]; ok {
+			return actual
+		}
+	}
+	return ""
+}
+
 func parseSeasonEpisode(name string) (season, episode int, ok bool) {
 	m := seRegex.FindStringSubmatch(name)
 	if m == nil {

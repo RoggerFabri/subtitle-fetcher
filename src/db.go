@@ -47,7 +47,7 @@ func openDB(_ string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve symlinks: %w", err)
 	}
-	
+
 	dbDir := filepath.Join(filepath.Dir(exe), "data")
 	if envDb := os.Getenv("DB_PATH"); envDb != "" {
 		dbDir = envDb
@@ -61,7 +61,10 @@ func openDB(_ string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+	// synchronous=NORMAL is safe with WAL (no corruption risk, only the last
+	// committed txn can be lost on power loss) and avoids an fsync per commit —
+	// a major speedup for the thousands of small writes a scan produces.
+	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;`); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("db pragmas: %w", err)
 	}
@@ -72,7 +75,15 @@ func openDB(_ string) (*sql.DB, error) {
 	// Migrations — no-op if column already exists.
 	db.Exec(`ALTER TABLE files ADD COLUMN subtitle_name TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE media ADD COLUMN imdb_id TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE media ADD COLUMN scan_sig TEXT NOT NULL DEFAULT ''`)
 	return db, nil
+}
+
+// dbExecer is satisfied by both *sql.DB and *sql.Tx, letting the upsert
+// helpers run either standalone or batched inside a scan transaction.
+type dbExecer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
 }
 
 func getSetting(db *sql.DB, key string) string {
@@ -86,7 +97,7 @@ func setSetting(db *sql.DB, key, value string) error {
 	return err
 }
 
-func upsertMedia(db *sql.DB, path, name, typ string) (int64, error) {
+func upsertMedia(db dbExecer, path, name, typ string) (int64, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := db.Exec(`
 		INSERT INTO media(path, name, type, last_scanned)
@@ -164,7 +175,7 @@ func pruneStale(db *sql.DB, seenMedia, seenFiles map[string]bool) (int, int, err
 	return removedMedia, removedFiles, nil
 }
 
-func upsertFile(db *sql.DB, mediaID int64, path string, season, episode *int, hasSubtitle bool, subtitleName string) error {
+func upsertFile(db dbExecer, mediaID int64, path string, season, episode *int, hasSubtitle bool, subtitleName string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	sub := 0
 	if hasSubtitle {
