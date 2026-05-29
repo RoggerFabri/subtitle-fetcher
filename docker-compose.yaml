@@ -1,7 +1,6 @@
 services:
   subtitle-fetcher:
     build: .
-    image: subtitle-fetcher:latest
     container_name: subtitle-fetcher
     ports:
       # Map host port 8080 to container port 8080
@@ -16,7 +15,7 @@ services:
       # - AUTO_SCAN_INTERVAL=30m
     volumes:
       # Bind mount the directory to serve.
-      # Replace "Z:\Shared\Downloads" with the actual path you want to scan/serve.
+      # Replace "/mnt/z/Shared/Downloads" with the actual path you want to scan/serve.
       - /mnt/z/Shared/Downloads:/media
       
       # Bind mount a local folder to persist the SQLite database and settings

@@ -20,11 +20,11 @@ endif
 VERSION ?= $(shell git describe --tags --always --dirty 2>$(NULL) || echo dev)
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
-.PHONY: all build run serve fmt vet lint test clean help
+.PHONY: all build run serve fmt vet lint test test-all retest clean help docker-build docker-run docker-clean
 .DEFAULT_GOAL := help
 
-## build   Run tests then compile the binary for the current platform
-build: test
+## build   Run the full test suite then compile the binary for the current platform
+build: test-all
 	go build $(LDFLAGS) -o $(OUT) ./src
 
 ## run     Build and run  (pass flags via ARGS=, e.g. make run ARGS="--scan Z:\path")
@@ -47,21 +47,29 @@ vet:
 lint:
 	staticcheck ./...
 
-## test    Run the test suite
+## test     Fast inner-loop tests (cached; skips fsnotify integration tests)
 test:
+	go test -short ./...
+
+## test-all Full suite incl. fsnotify watcher integration tests (cached)
+test-all:
+	go test ./...
+
+## retest   Force a full re-run, bypassing the test cache
+retest:
 	go test -count=1 ./...
 
-## clean   Remove compiled binary
+## clean   Remove compiled binaries (both platform names)
 clean:
 	go clean
-	-$(RM) $(OUT)
+	-$(RM) $(BINARY) $(BINARY).exe
 
 ## docker-build  Build the docker image
 docker-build:
 	docker build -t $(BINARY):latest .
 
-## docker-run    Run the docker image (with default binds)
-docker-run:
+## docker-run    Build then run the docker image (with default binds)
+docker-run: docker-build
 	docker run --rm -it -p $(PORT):$(PORT) -e PORT=$(PORT) -v "$(ROOT)":/media $(BINARY):latest --serve /media
 
 ## docker-clean  Remove the docker image
@@ -77,7 +85,9 @@ help:
 	@echo   fmt      Format source with gofmt
 	@echo   vet      Run go vet
 	@echo   lint     Run staticcheck
-	@echo   test     Run tests
+	@echo   test     Fast tests (cached, skips fsnotify integration tests)
+	@echo   test-all Full test suite (cached)
+	@echo   retest   Force a full re-run, bypassing the cache
 	@echo   clean    Remove build artifacts
 	@echo   docker-build  Build docker image
 	@echo   docker-run    Run docker image

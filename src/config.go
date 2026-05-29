@@ -14,8 +14,8 @@ type Config struct {
 	ScanRoot string
 
 	// serve mode
-	ServeRoot    string
-	Port         int
+	ServeRoot        string
+	Port             int
 	AutoScanInterval time.Duration
 
 	// fetch mode
@@ -33,7 +33,7 @@ func parseConfig() (Config, error) {
 	var cfg Config
 	flag.StringVar(&cfg.ScanRoot, "scan", "", "Root folder to scan for subtitle coverage (e.g. Z:\\Shared\\Downloads)")
 	flag.StringVar(&cfg.ServeRoot, "serve", "", "Root folder to serve the web UI for (e.g. Z:\\Shared\\Downloads)")
-	
+
 	defaultPort := 8080
 	if envPort := os.Getenv("PORT"); envPort != "" {
 		if p, err := strconv.Atoi(envPort); err == nil {

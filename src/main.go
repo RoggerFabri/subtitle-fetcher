@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-
 func main() {
 	cfg, err := parseConfig()
 	if err != nil {

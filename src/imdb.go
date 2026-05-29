@@ -10,7 +10,7 @@ import (
 
 // IMDBSuggestion is one result from the IMDB suggestion API.
 type IMDBSuggestion struct {
-	ID    string `json:"id"`    // numeric, without "tt" prefix
+	ID    string `json:"id"` // numeric, without "tt" prefix
 	Title string `json:"title"`
 	Year  int    `json:"year"`
 	Type  string `json:"type"` // "feature", "tv series", "tv mini series", etc.

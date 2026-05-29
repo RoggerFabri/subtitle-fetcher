@@ -561,8 +561,8 @@ func (p *openSubtitlesProvider) FetchSubtitle(videoPath, show string, keywords [
 						return nil, nil
 					}
 					res, err := p.cl.search(map[string]string{
-						"query":          show,
-						"languages":      "en",
+						"query":     show,
+						"languages": "en",
 					})
 					if err != nil {
 						return nil, err

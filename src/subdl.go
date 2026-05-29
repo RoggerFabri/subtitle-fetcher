@@ -33,8 +33,8 @@ func newSubDLProvider(apiKey string) *subdlProvider {
 
 func (p *subdlProvider) Name() string { return "subdl" }
 
-func (p *subdlProvider) Open() error  { return nil }
-func (p *subdlProvider) Close()       {}
+func (p *subdlProvider) Open() error { return nil }
+func (p *subdlProvider) Close()      {}
 
 func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string, imdbID, mediaType string, printMu *sync.Mutex) bool {
 	stem := strings.TrimSuffix(filepath.Base(videoPath), filepath.Ext(videoPath))
@@ -186,7 +186,9 @@ func (p *subdlProvider) FetchSubtitle(videoPath, show string, keywords []string,
 	urlVal, ok := best["url"].(string)
 	if !ok {
 		var ks []string
-		for k := range best { ks = append(ks, k) }
+		for k := range best {
+			ks = append(ks, k)
+		}
 		lines = append(lines, fmt.Sprintf("\n  No URL in response (keys: %v)", ks))
 		return flush(false)
 	}
@@ -272,7 +274,7 @@ func (p *subdlProvider) search(params map[string]string) ([]map[string]any, erro
 	}
 
 	var result struct {
-		Status  bool             `json:"status"`
+		Status    bool             `json:"status"`
 		Subtitles []map[string]any `json:"subtitles"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

@@ -93,6 +93,16 @@ func touch(t *testing.T, path string) {
 	}
 }
 
+// skipShort skips fsnotify integration tests under `go test -short`. They drive
+// real filesystem events with fixed sleeps + debounce and dominate the suite's
+// runtime; the fast inner loop (`make test`) skips them.
+func skipShort(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping fsnotify integration test in -short mode")
+	}
+}
+
 // ── resolveMediaDir ───────────────────────────────────────────────────────────
 
 func TestResolveMediaDir(t *testing.T) {
@@ -160,6 +170,7 @@ func TestResolveMediaDir(t *testing.T) {
 // ── integration tests ─────────────────────────────────────────────────────────
 
 func TestWatcherDetectsNewMovieFile(t *testing.T) {
+	skipShort(t)
 	root := newTestRoot(t)
 	db := newTestDB(t)
 
@@ -200,6 +211,7 @@ func TestWatcherDetectsNewMovieFile(t *testing.T) {
 }
 
 func TestWatcherDetectsNewSeriesFile(t *testing.T) {
+	skipShort(t)
 	root := newTestRoot(t)
 	db := newTestDB(t)
 
@@ -249,6 +261,7 @@ func TestWatcherDetectsNewSeriesFile(t *testing.T) {
 }
 
 func TestWatcherIgnoresNonVideoFile(t *testing.T) {
+	skipShort(t)
 	root := newTestRoot(t)
 	db := newTestDB(t)
 
@@ -271,6 +284,7 @@ func TestWatcherIgnoresNonVideoFile(t *testing.T) {
 }
 
 func TestWatcherSkipsFetchWhenSubtitlePresent(t *testing.T) {
+	skipShort(t)
 	root := newTestRoot(t)
 	db := newTestDB(t)
 
@@ -308,6 +322,7 @@ func TestWatcherSkipsFetchWhenSubtitlePresent(t *testing.T) {
 }
 
 func TestWatcherDebouncesMultipleEvents(t *testing.T) {
+	skipShort(t)
 	root := newTestRoot(t)
 	db := newTestDB(t)
 

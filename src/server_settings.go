@@ -31,12 +31,12 @@ func shortDuration(d time.Duration) string {
 
 func providerDefaults() map[string]string {
 	return map[string]string{
-		settingProviderOrder: "opensubtitles,subdl,wyzie",
-		settingOSEnabled:     "1",
-		settingSubDLEnabled:  "1",
-		settingWyzieEnabled:  "1",
-		settingWorkers:       "5",
-		settingAutoScanInterval:  "0",
+		settingProviderOrder:    "opensubtitles,subdl,wyzie",
+		settingOSEnabled:        "1",
+		settingSubDLEnabled:     "1",
+		settingWyzieEnabled:     "1",
+		settingWorkers:          "5",
+		settingAutoScanInterval: "0",
 	}
 }
 
