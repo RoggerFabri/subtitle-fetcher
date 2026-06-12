@@ -1,0 +1,4 @@
+# Shell scripts and Dockerfiles must use LF; CRLF breaks them inside Linux images.
+*.sh           text eol=lf
+entrypoint.sh  text eol=lf
+Dockerfile*    text eol=lf
