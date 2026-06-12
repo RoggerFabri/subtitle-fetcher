@@ -54,6 +54,15 @@ docker-compose up --build
 
 The compose file mounts your media directory at `/media` inside the container (edit the volume path in `docker-compose.yaml`) and persists the database in `./data` on the host. The container runs `--serve /media` by default.
 
+## Security
+
+The web UI has **no authentication** and is intended for a trusted local network only. In particular:
+
+- Provider credentials (including your OpenSubtitles password) are stored **in plaintext** in `subtitles.db`.
+- `GET /api/export` returns **all settings, including credentials, in plaintext** to any client that can reach the port.
+
+**Do not expose this server directly to the internet.** If you need remote access, place it behind a reverse proxy that enforces authentication (and TLS), or restrict it to a VPN/LAN.
+
 Environment variables set in the container:
 
 | Variable | Default | Description |
