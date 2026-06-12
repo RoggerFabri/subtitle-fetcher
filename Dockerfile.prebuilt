@@ -10,17 +10,24 @@ LABEL maintainer="Rogger Fabri" \
       org.opencontainers.image.source="https://github.com/RoggerFabri/subtitle-fetcher"
 
 RUN --mount=type=cache,target=/var/cache/apk \
-    apk add --no-cache ca-certificates tzdata
+    apk add --no-cache ca-certificates tzdata shadow su-exec
 
 WORKDIR /app
 
 # Copy the pre-built application binary (changes every build, so kept last).
 COPY dist/subtitle-fetcher /app/subtitle-fetcher
+COPY entrypoint.sh /entrypoint.sh
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data \
+    && addgroup -S appgroup \
+    && adduser -S -G appgroup appuser \
+    && chmod +x /entrypoint.sh
 
 ENV PORT=8080
 ENV DB_PATH=/app/data
+# Default to uid/gid 1000; override via PUID/PGID env (see docker-compose.yaml).
+ENV PUID=1000
+ENV PGID=1000
 
 EXPOSE 8080
 
@@ -31,5 +38,6 @@ VOLUME ["/app/data", "/media"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --spider -q http://localhost:8080/api/health || exit 1
 
-ENTRYPOINT ["/app/subtitle-fetcher"]
+# entrypoint.sh remaps appuser to PUID/PGID, applies TZ, then drops privileges.
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["--serve", "/media"]

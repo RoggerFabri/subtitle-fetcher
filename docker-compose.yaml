@@ -6,6 +6,12 @@ services:
       # Map host port 8080 to container port 8080
       - "8080:8080"
     environment:
+      # Run as this host user/group so subtitle sidecars written into /media and the
+      # database in /app/data are owned by your user (set to `id -u` / `id -g`).
+      - PUID=1000
+      - PGID=1000
+      # Container timezone (e.g. used for log timestamps and scheduling).
+      - TZ=Europe/Dublin
       # The application will read this environment variable
       - PORT=8080
       # Tells the application to store its database here instead of the binary directory
