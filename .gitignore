@@ -2,6 +2,7 @@
 subtitle-fetcher
 subtitle-fetcher.exe
 *.exe
+/dist/
 
 # Database
 *.db

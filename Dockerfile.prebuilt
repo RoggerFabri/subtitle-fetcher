@@ -1,0 +1,35 @@
+# Dockerfile for pre-built binaries (used by the GitHub Actions native build).
+# Expects the Go binary already built at dist/subtitle-fetcher in the build context.
+# The web UI is embedded into the binary via go:embed (see src/ui.go), so no
+# static assets need to be copied here.
+
+FROM alpine:3.21
+
+LABEL maintainer="Rogger Fabri" \
+      description="Subtitle Fetcher — web UI for browsing and fetching media subtitles" \
+      org.opencontainers.image.source="https://github.com/RoggerFabri/subtitle-fetcher"
+
+RUN --mount=type=cache,target=/var/cache/apk \
+    apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+# Copy the pre-built application binary (changes every build, so kept last).
+COPY dist/subtitle-fetcher /app/subtitle-fetcher
+
+RUN mkdir -p /app/data
+
+ENV PORT=8080
+ENV DB_PATH=/app/data
+
+EXPOSE 8080
+
+# Database/settings live in /app/data; the media library is mounted at /media.
+VOLUME ["/app/data", "/media"]
+
+# /api/health always returns 200 once the server is up.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget --spider -q http://localhost:8080/api/health || exit 1
+
+ENTRYPOINT ["/app/subtitle-fetcher"]
+CMD ["--serve", "/media"]
