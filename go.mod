@@ -3,7 +3,6 @@ module subtitle-fetcher
 go 1.25.0
 
 require (
-  dependabot/go_modules/modernc.org/sqlite-1.52.0
 	github.com/fsnotify/fsnotify v1.10.1
 	modernc.org/sqlite v1.52.0
 )
