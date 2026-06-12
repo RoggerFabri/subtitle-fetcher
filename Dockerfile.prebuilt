@@ -3,7 +3,7 @@
 # The web UI is embedded into the binary via go:embed (see src/ui.go), so no
 # static assets need to be copied here.
 
-FROM alpine:3.21
+FROM alpine:3.24
 
 LABEL maintainer="Rogger Fabri" \
       description="Subtitle Fetcher — web UI for browsing and fetching media subtitles" \
