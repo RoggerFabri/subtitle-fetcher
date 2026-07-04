@@ -130,6 +130,18 @@
     <div id="picker-status" class="modal-status" style="display:none"></div>
   </div>
 </div>
+<div id="nfo-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span id="nfo-modal-title">NFO</span>
+      <div class="modal-header-actions">
+        <button id="nfo-raw-toggle" class="nfo-raw-toggle hidden" onclick="window.app.toggleNfoRaw()">View raw XML</button>
+        <button class="modal-close" onclick="window.app.closeNfo()">✕</button>
+      </div>
+    </div>
+    <div id="nfo-body" class="nfo-body"></div>
+  </div>
+</div>
 <div id="preview-modal" class="modal-overlay hidden">
   <div class="modal modal--preview">
     <div class="modal-header">

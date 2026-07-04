@@ -127,6 +127,18 @@ export function renderList() {
       ? `<a class="imdb-chip" href="https://www.imdb.com/title/tt${imdbId}/" target="_blank" onclick="event.stopPropagation()">IMDb ↗</a>`
       : `<span class="imdb-chip unset" onclick="window.app.openImdbPicker(${id}, event)">+ IMDb</span>`;
 
+    const year = m.year || m.Year || 0;
+    // Movies already carry the year in their folder name; only series need it appended.
+    const yearTag = (type === 'series' && year) ? `<span class="media-year">${year}</span>` : '';
+    const air = m.air_status || m.AirStatus || '';
+    const airBadge = air
+      ? `<span class="air-badge air-${air.toLowerCase().replace(/[^a-z]+/g, '-')}">${air}</span>`
+      : '';
+    const hasNfo = m.has_nfo || m.HasNFO;
+    const nfoBtn = hasNfo
+      ? `<button class="nfo-btn" onclick="window.app.openNfo(${id}, event)">NFO</button>`
+      : '';
+
     let chooseBtn = '';
     let fetchBtn = `<button class="fetch-btn" id="fetch-media-${id}" onclick="window.app.fetchMedia(${id}, event)">${label}</button>`;
     if (type === 'movie') {
@@ -146,10 +158,12 @@ export function renderList() {
     <div class="media-card ${isExpanded ? 'expanded' : ''}">
       <div class="media-header" onclick="window.app.toggleExpand(${id})">
         <span class="badge badge-${type}">${type}</span>
-        <span class="media-name">${m.name || m.Name}</span>
+        <span class="media-name">${m.name || m.Name}${yearTag}</span>
+        ${airBadge}
         <span class="coverage">${m.subtitles_count}/${m.total_count}</span>
         <div class="dot dot-${getStatusColor(m.status)}"></div>
         ${imdbChip}
+        ${nfoBtn}
         ${fetchBtn}
         ${chooseBtn}
         <span class="chevron">${isExpanded ? '▾' : '▸'}</span>

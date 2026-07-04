@@ -16,6 +16,15 @@ export async function apiGetMediaFiles(id) {
   return res.json();
 }
 
+export async function apiGetNfo(id) {
+  const res = await fetch(`/api/media/${id}/nfo`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Failed to load NFO");
+  }
+  return res.json();
+}
+
 export async function apiPostScan() {
   const res = await fetch('/api/scan', { method: 'POST' });
   if (!res.ok) {

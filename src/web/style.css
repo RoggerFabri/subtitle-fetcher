@@ -497,3 +497,85 @@ main { padding: 24px; }
 .subtitle-del-btn.btn-confirm {
   background: var(--red); color: #fff; border-color: var(--red);
 }
+
+/* --- NFO: row affordances --- */
+.media-year { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 12px; }
+.nfo-btn { font-size: 11px; padding: 2px 8px; flex-shrink: 0; color: var(--muted); }
+.nfo-btn:hover { color: var(--text); border-color: #3d4056; }
+
+.air-badge {
+  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0;
+  background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+}
+.air-continuing { background: #0d2a1a; color: #4ade80; border-color: #1c5238; }
+.air-ended { background: #2a1a1a; color: #f87171; border-color: #532020; }
+
+/* --- NFO: viewer modal --- */
+.modal-header-actions { display: flex; align-items: center; gap: 8px; }
+.nfo-raw-toggle { font-size: 11px; padding: 3px 10px; color: var(--muted); }
+.nfo-raw-toggle:hover { color: var(--text); border-color: #3d4056; }
+.nfo-body { overflow-y: auto; max-height: 72vh; padding: 18px 20px; }
+/* The raw <pre> reuses .preview-body, which scrolls itself; inside .nfo-body
+   that would stack a second scrollbar, so let the outer container scroll it. */
+.nfo-body .preview-body { max-height: none; overflow: visible; padding: 0; }
+
+.nfo-card { display: flex; flex-direction: column; gap: 12px; }
+
+.nfo-carousel {
+  position: relative; width: 100%; height: 240px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+/* Fixed-height box; the image is letterboxed inside via contain so it never
+   overflows or resizes the carousel regardless of its aspect ratio. */
+.nfo-art-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.nfo-art-img.nfo-art-broken { opacity: 0; }
+.nfo-carousel:has(.nfo-art-broken)::after {
+  content: 'Image unavailable'; position: absolute; color: var(--muted); font-size: 12px;
+}
+.nfo-art-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 38px; height: 58px; padding: 0; font-size: 26px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.5); color: #fff; border: none; cursor: pointer;
+}
+.nfo-art-nav:hover { background: rgba(0,0,0,.8); }
+.nfo-art-prev { left: 0; border-radius: 0 8px 8px 0; }
+.nfo-art-next { right: 0; border-radius: 8px 0 0 8px; }
+.nfo-art-caption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; justify-content: space-between; gap: 10px; padding: 6px 12px;
+  font-size: 11px; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.75));
+}
+.nfo-title { font-size: 18px; font-weight: 600; line-height: 1.3; }
+.nfo-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.nfo-type {
+  font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .05em;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+}
+.nfo-tagline { margin: 0; font-style: italic; color: var(--muted); font-size: 13px; }
+.nfo-plot { margin: 0; font-size: 13px; line-height: 1.6; color: var(--text); }
+
+.nfo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nfo-chip {
+  font-size: 11px; padding: 2px 9px; border-radius: 999px;
+  background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+}
+
+.nfo-rows { display: flex; flex-direction: column; gap: 4px; }
+.nfo-row { display: flex; gap: 12px; font-size: 12px; }
+.nfo-k { flex-shrink: 0; width: 90px; color: var(--muted); }
+.nfo-v { color: var(--text); }
+
+.nfo-section-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); margin-top: 4px;
+}
+.nfo-cast {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 16px;
+}
+.nfo-cast-item { display: flex; flex-direction: column; font-size: 12px; }
+.nfo-actor { color: var(--text); }
+.nfo-role { color: var(--muted); font-size: 11px; }

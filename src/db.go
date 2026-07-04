@@ -76,6 +76,9 @@ func openDB(_ string) (*sql.DB, error) {
 	db.Exec(`ALTER TABLE files ADD COLUMN subtitle_name TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE media ADD COLUMN imdb_id TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE media ADD COLUMN scan_sig TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE media ADD COLUMN nfo_path TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE media ADD COLUMN year INTEGER NOT NULL DEFAULT 0`)
+	db.Exec(`ALTER TABLE media ADD COLUMN air_status TEXT NOT NULL DEFAULT ''`)
 	return db, nil
 }
 

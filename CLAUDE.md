@@ -40,7 +40,7 @@ src/web/js/            ES module frontend
     mediaList.js       Library tab rendering
     settings.js        Provider cards, export/import
     actions.js         Fetch, delete, scan actions
-    modals.js          Subtitle picker + IMDB picker
+    modals.js          Subtitle picker + IMDB picker + NFO viewer
 data/                  Runtime data (gitignored)
   subtitles.db         SQLite database
 Dockerfile
@@ -65,13 +65,15 @@ docker-compose.yaml
 | `wyzie.go` | Wyzie API client + `subtitleProvider` implementation |
 | `podnapisi.go` | Podnapisi provider (stub) |
 | `imdb.go` | IMDB suggestion API; `discoverIMDBID`, `fetchIMDBSuggestions`, `IMDBSuggestion` |
+| `nfo.go` | Kodi/Jellyfin `.nfo` parser (`parseNFO`, `nfoData`, `findNFO`, `parseMediaNFO`); extracts IMDB id, year, airing status at scan time |
+| `server_nfo.go` | `GET /api/media/{id}/nfo` — parsed metadata + raw XML for the viewer modal |
 | `ui.go` | `//go:embed web` + hot-reload SSE for dev |
 
 ### Database (`data/subtitles.db`)
 
 Stored in `data/` next to the binary by default. Override with `DB_PATH` env var (used by Docker to point at the mounted volume).
 
-- `media(id, path, name, type, imdb_id, last_scanned, scan_sig)` — one row per movie/series folder
+- `media(id, path, name, type, imdb_id, last_scanned, scan_sig, nfo_path, year, air_status)` — one row per movie/series folder. `nfo_path`/`year`/`air_status` are populated from the folder's `.nfo` during scan (`air_status` = series Continuing/Ended)
 - `files(id, media_id, path, season, episode, has_subtitle, subtitle_name, last_seen)` — one row per video file
 - `settings(key, value)` — provider credentials, order, toggles
 
@@ -107,13 +109,14 @@ Download tokens use the format `"provider:handle"` (e.g. `"subdl:/subtitle/abc.z
 
 ### IMDB ID caching
 
-`discoverIMDBID` is called at most once per media entry — the result is stored in `media.imdb_id` and reused on all subsequent fetches. Users can override it via the IMDB picker (`PUT /api/media/{id}/imdb`). The column is never overwritten during a rescan.
+During a scan, if the media folder has an `.nfo`, its IMDB id (from `<imdbid>` / `<imdb_id>`, or `<id>` only when `tt`-prefixed) seeds `media.imdb_id` when empty — offline and exact, so no API guess is needed. When there's no NFO, `discoverIMDBID` (IMDB suggestion API) is the fallback and is called at most once per media entry; the result is stored in `media.imdb_id` and reused on all subsequent fetches. Users can override it via the IMDB picker (`PUT /api/media/{id}/imdb`). The column is never overwritten during a rescan.
 
 ### Key API routes
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/report` | Full media + file list with subtitle status |
+| `GET` | `/api/report` | Full media + file list with subtitle status (incl. `year`, `air_status`, `has_nfo`) |
+| `GET` | `/api/media/{id}/nfo` | Parsed NFO metadata + raw XML for the viewer modal |
 | `POST` | `/api/scan` | Trigger FS scan |
 | `GET` | `/api/scan/status` | Scan progress |
 | `POST` | `/api/fetch/media/{id}` | Fetch all missing subtitles for a media entry |

@@ -21,6 +21,9 @@ type apiMedia struct {
 	Name           string    `json:"name"`
 	Type           string    `json:"type"`
 	ImdbID         string    `json:"imdb_id,omitempty"`
+	Year           int       `json:"year,omitempty"`
+	AirStatus      string    `json:"air_status,omitempty"`
+	HasNFO         bool      `json:"has_nfo"`
 	TotalCount     int       `json:"total_count"`
 	SubtitlesCount int       `json:"subtitles_count"`
 	Files          []apiFile `json:"files,omitempty"`
@@ -28,7 +31,8 @@ type apiMedia struct {
 
 func (s *server) handleReport(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(`
-		SELECT m.id, m.name, m.type, m.imdb_id,
+		SELECT m.id, m.name, m.type, m.imdb_id, m.year, m.air_status,
+		       CASE WHEN m.nfo_path != '' THEN 1 ELSE 0 END AS has_nfo,
 		       COUNT(f.id),
 		       SUM(CASE WHEN f.has_subtitle=1 THEN 1 ELSE 0 END)
 		FROM media m
@@ -45,10 +49,12 @@ func (s *server) handleReport(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var m apiMedia
 		var subCount sql.NullInt64
-		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID, &m.TotalCount, &subCount); err != nil {
+		var hasNFO int
+		if err := rows.Scan(&m.ID, &m.Name, &m.Type, &m.ImdbID, &m.Year, &m.AirStatus, &hasNFO, &m.TotalCount, &subCount); err != nil {
 			jsonError(w, err.Error(), 500)
 			return
 		}
+		m.HasNFO = hasNFO == 1
 		m.SubtitlesCount = int(subCount.Int64)
 		result = append(result, m)
 	}

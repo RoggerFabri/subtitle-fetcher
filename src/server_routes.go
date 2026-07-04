@@ -34,6 +34,8 @@ func (s *server) routes() http.Handler {
 
 	mux.HandleFunc("GET /api/report", s.handleReport)
 	mux.HandleFunc("GET /api/media/{id}/files", s.handleMediaFiles)
+	mux.HandleFunc("GET /api/media/{id}/nfo", s.handleMediaNFO)
+	mux.HandleFunc("GET /api/media/{id}/art", s.handleMediaArt)
 	mux.HandleFunc("GET /api/hot-reload", s.handleHotReload)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("POST /api/settings", s.handleSaveSettings)
@@ -131,10 +133,20 @@ func (s *server) watchWeb() {
 	}
 }
 
+// bootID is unique per server process. The hot-reload client remembers the
+// first value it sees and reloads when it later sees a different one — that's
+// how a `make serve` rebuild+restart is detected without a manual refresh.
+var bootID = fmt.Sprint(time.Now().UnixNano())
+
 func (s *server) handleHotReload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		return
+	}
 
 	ch := make(chan bool)
 	s.listenersMu.Lock()
@@ -147,12 +159,26 @@ func (s *server) handleHotReload(w http.ResponseWriter, r *http.Request) {
 		s.listenersMu.Unlock()
 	}()
 
-	select {
-	case <-ch:
-		fmt.Fprintf(w, "data: reload\n\n")
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
+	// Send the boot id first (also flushes headers so the connection is live),
+	// then heartbeat every second. If the server is killed the pings stop; the
+	// client's watchdog then reconnects — a dropped SSE socket is otherwise not
+	// detected promptly by the browser, so onerror/onopen alone are unreliable.
+	fmt.Fprintf(w, "data: %s\n\n", bootID)
+	flusher.Flush()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ch:
+			fmt.Fprint(w, "data: reload\n\n")
+			flusher.Flush()
+		case <-ticker.C:
+			fmt.Fprint(w, "data: ping\n\n")
+			flusher.Flush()
+		case <-r.Context().Done():
+			return
 		}
-	case <-r.Context().Done():
 	}
 }

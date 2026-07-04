@@ -23,12 +23,48 @@ window.app.showTab = function(name) {
   });
 };
 
-// Hot-reload: listen for server-sent file-change events and reload the page.
+// Defensive: this app ships no service worker. Unregister any stale one left on
+// this origin by a previous project (a common cause of `GET /sw.js 404` noise
+// and of a stale SW intercepting/caching requests) and drop its caches.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then(regs => regs.forEach(r => r.unregister()))
+    .catch(() => {});
+  if (window.caches?.keys) {
+    caches.keys().then(keys => keys.forEach(k => caches.delete(k))).catch(() => {});
+  }
+}
+
+// Hot-reload. The server streams a per-process boot id, a 1s heartbeat, and an
+// explicit "reload" on file changes. We reload when:
+//   - the server asks ("reload"), or
+//   - the boot id changes (server was restarted, e.g. `make serve`), or
+//   - heartbeats stop for a few seconds (the socket died) — a watchdog forces a
+//     reconnect, which then picks up the new boot id.
+// The watchdog matters because a dropped SSE connection is not detected
+// promptly by the browser, so onerror alone would leave the tab stale until a
+// manual refresh.
 (function () {
+  let boot = null;
+  let es = null;
+  let watchdog = null;
+
+  function armWatchdog() {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => { try { es && es.close(); } catch {} connect(); }, 4000);
+  }
+
   function connect() {
-    const es = new EventSource('/api/hot-reload');
-    es.onmessage = () => location.reload();
-    es.onerror = () => { es.close(); setTimeout(connect, 2000); };
+    es = new EventSource('/api/hot-reload');
+    es.onmessage = (e) => {
+      armWatchdog();
+      if (e.data === 'reload') { location.reload(); return; }
+      if (e.data === 'ping') return;
+      // Anything else is a boot id.
+      if (boot === null) boot = e.data;
+      else if (e.data !== boot) location.reload();
+    };
+    es.onerror = () => { clearTimeout(watchdog); try { es.close(); } catch {} setTimeout(connect, 1000); };
   }
   connect();
 })();
@@ -131,15 +167,20 @@ document.getElementById('imdb-modal')?.addEventListener('click', e => {
 document.getElementById('preview-modal')?.addEventListener('click', e => {
   if (e.target === e.currentTarget) window.app.closeSubtitlePreview();
 });
+document.getElementById('nfo-modal')?.addEventListener('click', e => {
+  if (e.target === e.currentTarget) window.app.closeNfo();
+});
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     window.app.closePicker();
     window.app.closeImdbPicker();
     window.app.closeSubtitlePreview();
+    window.app.closeNfo();
   }
   window.app.handlePickerKey(e);
   window.app.handleImdbKey(e);
+  window.app.handleNfoKey(e);
   const modalOpen = !document.getElementById('picker-modal')?.classList.contains('hidden') ||
                     !document.getElementById('imdb-modal')?.classList.contains('hidden');
   if (e.key === '/' && !modalOpen && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {

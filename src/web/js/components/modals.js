@@ -207,6 +207,163 @@ export function closeSubtitlePreview() {
   document.getElementById('preview-modal').classList.add('hidden');
 }
 
+// --- NFO viewer ---
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+const NFO_TYPE_LABEL = { movie: 'Movie', tvshow: 'Series', episodedetails: 'Episode' };
+
+function nfoArtURL(item) {
+  return `/api/media/${state.nfoArtMediaId}/art?name=${encodeURIComponent(item.name)}`;
+}
+
+function renderNfoCarousel(art) {
+  if (!art || !art.length) return '';
+  const first = art[0];
+  const nav = art.length > 1
+    ? `<button class="nfo-art-nav nfo-art-prev" onclick="window.app.nfoArtStep(-1)" aria-label="Previous">‹</button>
+       <button class="nfo-art-nav nfo-art-next" onclick="window.app.nfoArtStep(1)" aria-label="Next">›</button>`
+    : '';
+  return `
+    <div class="nfo-carousel">
+      <img id="nfo-art-img" class="nfo-art-img" src="${nfoArtURL(first)}" alt="${esc(first.label)}"
+           onerror="window.app.onNfoArtError()">
+      ${nav}
+      <div class="nfo-art-caption">
+        <span id="nfo-art-label">${esc(first.label)}</span>
+        <span id="nfo-art-count">1 / ${art.length}</span>
+      </div>
+    </div>`;
+}
+
+function updateNfoArt() {
+  const art = state.nfoArt || [];
+  const item = art[state.nfoArtIndex];
+  if (!item) return;
+  const img = document.getElementById('nfo-art-img');
+  const label = document.getElementById('nfo-art-label');
+  const count = document.getElementById('nfo-art-count');
+  if (img) { img.classList.remove('nfo-art-broken'); img.src = nfoArtURL(item); img.alt = item.label; }
+  if (label) label.textContent = item.label;
+  if (count) count.textContent = `${state.nfoArtIndex + 1} / ${art.length}`;
+}
+
+export function nfoArtStep(delta) {
+  const art = state.nfoArt || [];
+  if (art.length < 2) return;
+  state.nfoArtIndex = (state.nfoArtIndex + delta + art.length) % art.length;
+  updateNfoArt();
+}
+
+export function onNfoArtError() {
+  const img = document.getElementById('nfo-art-img');
+  if (img) img.classList.add('nfo-art-broken');
+}
+
+export function handleNfoKey(e) {
+  if (document.getElementById('nfo-modal')?.classList.contains('hidden')) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); nfoArtStep(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); nfoArtStep(-1); }
+}
+
+function renderNfoCard(nfo) {
+  const d = nfo.data || {};
+  const row = (k, v) => `<div class="nfo-row"><span class="nfo-k">${k}</span><span class="nfo-v">${v}</span></div>`;
+
+  const title = d.title || d.original_title || d.show_title || '(untitled)';
+  const typeLabel = NFO_TYPE_LABEL[nfo.type] || nfo.type || '';
+
+  const bits = [];
+  if (d.year) bits.push(esc(d.year));
+  if (d.runtime) bits.push(esc(d.runtime) + ' min');
+  if (d.mpaa) bits.push(esc(d.mpaa));
+  if (d.status) bits.push(esc(d.status));
+  if (d.rating) bits.push('★ ' + esc(Number(d.rating).toFixed(1)));
+
+  const imdb = nfo.imdb_id
+    ? `<a class="imdb-chip" href="https://www.imdb.com/title/tt${esc(nfo.imdb_id)}/" target="_blank">IMDb ↗</a>`
+    : '';
+
+  const genres = (d.genres || []).filter(Boolean)
+    .map(g => `<span class="nfo-chip">${esc(g)}</span>`).join('');
+
+  const rows = [];
+  if (d.premiered) rows.push(row('Premiered', esc(d.premiered)));
+  if (d.end_date) rows.push(row('Ended', esc(d.end_date)));
+  if ((d.directors || []).length) rows.push(row('Director', d.directors.map(esc).join(', ')));
+  const studios = (d.studios || []).filter(Boolean);
+  if (studios.length) rows.push(row('Studio', studios.map(esc).join(', ')));
+  if (d.collection && d.collection.name) rows.push(row('Collection', esc(d.collection.name)));
+
+  const actors = (d.actors || []).filter(a => !a.type || a.type === 'Actor').slice(0, 12);
+  const cast = actors.length
+    ? `<div class="nfo-section-label">Cast</div>
+       <div class="nfo-cast">${actors.map(a => `
+         <div class="nfo-cast-item">
+           <span class="nfo-actor">${esc(a.name)}</span>
+           ${a.role ? `<span class="nfo-role">${esc(a.role)}</span>` : ''}
+         </div>`).join('')}</div>`
+    : '';
+
+  return `
+    <div id="nfo-card" class="nfo-card">
+      ${renderNfoCarousel(nfo.art)}
+      <div class="nfo-title">${esc(title)}</div>
+      <div class="nfo-meta">
+        ${typeLabel ? `<span class="nfo-type">${esc(typeLabel)}</span>` : ''}
+        ${bits.length ? `<span>${bits.join(' · ')}</span>` : ''}
+        ${imdb}
+      </div>
+      ${d.tagline ? `<p class="nfo-tagline">“${esc(d.tagline)}”</p>` : ''}
+      ${d.plot ? `<p class="nfo-plot">${esc(d.plot)}</p>` : ''}
+      ${genres ? `<div class="nfo-chips">${genres}</div>` : ''}
+      ${rows.length ? `<div class="nfo-rows">${rows.join('')}</div>` : ''}
+      ${cast}
+    </div>
+    <pre id="nfo-raw" class="preview-body hidden">${esc(nfo.raw)}</pre>`;
+}
+
+export async function openNfo(mediaId, event) {
+  if (event) event.stopPropagation();
+  const modal = document.getElementById('nfo-modal');
+  const body = document.getElementById('nfo-body');
+  const toggle = document.getElementById('nfo-raw-toggle');
+  const m = (state.mediaData || []).find(x => (x.id || x.Id) === mediaId);
+  document.getElementById('nfo-modal-title').textContent = m ? (m.name || m.Name) : 'NFO';
+  if (toggle) { toggle.textContent = 'View raw XML'; toggle.classList.add('hidden'); }
+  body.innerHTML = '<div class="picker-loading">Loading…</div>';
+  state.nfoArt = [];
+  state.nfoArtIndex = 0;
+  state.nfoArtMediaId = mediaId;
+  modal.classList.remove('hidden');
+  try {
+    const nfo = await api.apiGetNfo(mediaId);
+    state.nfoArt = nfo.art || [];
+    state.nfoArtIndex = 0;
+    body.innerHTML = renderNfoCard(nfo);
+    if (toggle) toggle.classList.remove('hidden');
+  } catch (err) {
+    body.innerHTML = `<div class="picker-empty">${esc(err.message || 'Failed to load NFO.')}</div>`;
+  }
+}
+
+export function toggleNfoRaw() {
+  const raw = document.getElementById('nfo-raw');
+  const card = document.getElementById('nfo-card');
+  const toggle = document.getElementById('nfo-raw-toggle');
+  if (!raw) return;
+  const showRaw = raw.classList.toggle('hidden') === false;
+  if (card) card.classList.toggle('hidden', showRaw);
+  if (toggle) toggle.textContent = showRaw ? 'View formatted' : 'View raw XML';
+}
+
+export function closeNfo() {
+  document.getElementById('nfo-modal').classList.add('hidden');
+}
+
 export async function selectImdbID(mediaId, imdbId, event) {
   if (event) event.stopPropagation();
   try {

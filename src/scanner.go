@@ -35,8 +35,9 @@ type fileResult struct {
 type scanResult struct {
 	entry   scanEntry
 	files   []fileResult
-	sig     string // directory signature captured this scan (empty when skipped)
-	skipped bool   // true when the folder was unchanged and not re-read
+	sig     string   // directory signature captured this scan (empty when skipped)
+	skipped bool     // true when the folder was unchanged and not re-read
+	nfo     *nfoInfo // metadata parsed from the folder's NFO (nil when absent)
 	scanErr error
 }
 
@@ -212,7 +213,13 @@ func scanEntryFS(e scanEntry, priorSigs map[string]string) scanResult {
 	case "series":
 		files, sig, skipped, scanErr = scanSeriesFS(e.dir, prior)
 	}
-	return scanResult{entry: e, files: files, sig: sig, skipped: skipped, scanErr: scanErr}
+	res := scanResult{entry: e, files: files, sig: sig, skipped: skipped, scanErr: scanErr}
+	// Parse the folder's NFO only when the folder actually changed — skipped
+	// folders keep their previously stored metadata.
+	if scanErr == nil && !skipped {
+		res.nfo = parseMediaNFO(e.dir, e.typ)
+	}
+	return res
 }
 
 // dirSig formats a directory's mtime into a comparable signature token.
@@ -360,6 +367,23 @@ func writeResultToDB(db *sql.DB, r scanResult) error {
 	if _, err := tx.Exec(`UPDATE media SET scan_sig = ? WHERE id = ?`, r.sig, mediaID); err != nil {
 		tx.Rollback()
 		return err
+	}
+	// Persist NFO-derived metadata. imdb_id is only set when currently empty so
+	// a user-chosen or previously discovered id is never overwritten; the NFO
+	// value otherwise seeds it offline and exactly, skipping the IMDB API guess.
+	if r.nfo != nil {
+		if _, err := tx.Exec(`UPDATE media SET nfo_path = ?, year = ?, air_status = ? WHERE id = ?`,
+			r.nfo.path, r.nfo.year, r.nfo.status, mediaID); err != nil {
+			tx.Rollback()
+			return err
+		}
+		if r.nfo.imdb != "" {
+			if _, err := tx.Exec(`UPDATE media SET imdb_id = ? WHERE id = ? AND (imdb_id = '' OR imdb_id IS NULL)`,
+				r.nfo.imdb, mediaID); err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
 	}
 	for _, f := range r.files {
 		if err := upsertFile(tx, mediaID, f.path, f.season, f.episode, f.hasSubtitle, f.subtitleName); err != nil {
