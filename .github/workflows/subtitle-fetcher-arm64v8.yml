@@ -33,7 +33,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Extract Go version from go.mod
         id: go-version
         run: echo "version=$(grep -oP '^go \K[0-9.]+' go.mod)" >> "$GITHUB_OUTPUT"
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Extract Go version from go.mod
         id: go-version
