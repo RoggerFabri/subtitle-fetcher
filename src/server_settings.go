@@ -72,6 +72,7 @@ func (s *server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		providers[name] = p
 	}
 	providers[settingProviderOrder] = order
+	providers[settingTMDBApiKey] = getSetting(s.db, settingTMDBApiKey)
 	workers := int(s.workers.Load())
 	providers["workers"] = workers
 	s.pollerMu.Lock()
@@ -125,6 +126,14 @@ func (s *server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 				setSetting(s.db, settingAutoScanInterval, v)
 				s.updatePoller(d)
 			}
+		}
+	}
+
+	// TMDB API key (blank is ignored so a masked round-trip can't clear it)
+	if raw, ok := body[settingTMDBApiKey]; ok {
+		var v string
+		if err := json.Unmarshal(raw, &v); err == nil && v != "" {
+			setSetting(s.db, settingTMDBApiKey, v)
 		}
 	}
 

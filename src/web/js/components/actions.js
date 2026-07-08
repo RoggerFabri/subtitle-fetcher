@@ -163,6 +163,44 @@ export async function fetchMedia(id, event) {
   }
 }
 
+export async function backfillNfo(id, event) {
+  if (event) event.stopPropagation();
+  const btn = document.getElementById(`nfo-get-${id}`);
+  const name = mediaNameById(id);
+  setFetching(btn, true);
+  try {
+    const data = await api.apiBackfillNfo(id);
+    const prefix = name ? `"${name}" — ` : '';
+    if (data.skipped) {
+      showToast(`${prefix}already has an NFO`, "info");
+    } else {
+      showToast(`${prefix}NFO created`, "success");
+    }
+    await refreshMediaAndStats();
+    flashCard(id);
+  } catch (err) {
+    showToast(`${name ? `"${name}" — ` : ''}${err.message || 'NFO backfill failed'}`, "error");
+  } finally {
+    setFetching(document.getElementById(`nfo-get-${id}`), false);
+  }
+}
+
+export async function backfillAllNfo() {
+  const btn = document.getElementById('backfill-nfo-btn');
+  setFetching(btn, true);
+  showToast('Backfilling NFOs from TMDB…', 'info');
+  try {
+    const data = await api.apiBackfillAllNfo();
+    showToast(`NFO backfill: ${data.created} created, ${data.skipped} skipped, ${data.failed} failed`,
+      data.created > 0 ? 'success' : 'info');
+    await refreshMediaAndStats();
+  } catch (err) {
+    showToast(err.message || 'NFO backfill failed', 'error');
+  } finally {
+    setFetching(document.getElementById('backfill-nfo-btn'), false);
+  }
+}
+
 export async function fetchSeason(id, season, event) {
   if (event) event.stopPropagation();
   const btn = document.getElementById(`fetch-season-${id}-${season}`);

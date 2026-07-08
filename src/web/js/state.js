@@ -14,6 +14,7 @@ export const state = {
   imdbTargetMediaId: null,
   workers: 5,
   autoScanInterval: '0',
+  tmdbApiKey: '',
   fileCache: new Map(),  // mediaId → apiFile[]
   settingsDirty: false,
   fetchingMediaIds: new Set(),    // mediaId — fetchMedia in progress

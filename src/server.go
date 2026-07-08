@@ -29,6 +29,9 @@ const (
 	settingWyzieEnabled = "wyzie_enabled"
 	settingWyzieApiKey  = "wyzie_api_key"
 
+	// TMDB metadata (used to backfill NFOs, not a subtitle provider)
+	settingTMDBApiKey = "tmdb_api_key"
+
 	settingAutoScanInterval = "auto_scan_interval"
 )
 
