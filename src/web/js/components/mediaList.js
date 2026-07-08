@@ -64,6 +64,7 @@ export function renderList() {
   const typeFilter = document.querySelector('.pills[data-filter="type"] .pill.active')?.dataset.value || "";
   const statusFilter = document.querySelector('.pills[data-filter="status"] .pill.active')?.dataset.value || "";
   const imdbFilter = document.querySelector('.pills[data-filter="imdb"] .pill.active')?.dataset.value || "";
+  const nfoFilter = document.querySelector('.pills[data-filter="nfo"] .pill.active')?.dataset.value || "";
   const sortBy = document.querySelector('.pills[data-filter="sort"] .pill.active')?.dataset.value || "";
 
   const filtered = (state.mediaData || []).filter(m => {
@@ -72,6 +73,7 @@ export function renderList() {
     const type = m.type || m.Type || "";
     const status = m.status || m.Status || "";
     const imdbId = m.imdb_id || m.ImdbID || "";
+    const hasNfo = m.has_nfo || m.HasNFO || false;
     const matchesSearch = name.toLowerCase().includes(query);
     const matchesType = !typeFilter || type === typeFilter;
     const matchesStatus = !statusFilter ||
@@ -80,7 +82,10 @@ export function renderList() {
     const matchesImdb = !imdbFilter ||
       (imdbFilter === 'yes' && imdbId) ||
       (imdbFilter === 'no' && !imdbId);
-    return matchesSearch && matchesType && matchesStatus && matchesImdb;
+    const matchesNfo = !nfoFilter ||
+      (nfoFilter === 'yes' && hasNfo) ||
+      (nfoFilter === 'no' && !hasNfo);
+    return matchesSearch && matchesType && matchesStatus && matchesImdb && matchesNfo;
   });
 
   if (sortBy === 'name') {
@@ -102,7 +107,7 @@ export function renderList() {
 
   if (filtered.length === 0) {
     const hasData = (state.mediaData || []).some(m => m.total_count > 0);
-    const hasFilters = query || typeFilter || statusFilter || imdbFilter;
+    const hasFilters = query || typeFilter || statusFilter || imdbFilter || nfoFilter;
     if (!hasData) {
       container.innerHTML = `
         <div class="empty-state">
