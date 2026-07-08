@@ -15,45 +15,53 @@ import (
 
 // nfoActor is one cast/crew entry from an NFO file.
 type nfoActor struct {
-	Name string `xml:"name" json:"name,omitempty"`
-	Role string `xml:"role" json:"role,omitempty"`
-	Type string `xml:"type" json:"type,omitempty"`
+	Name string `xml:"name,omitempty" json:"name,omitempty"`
+	Role string `xml:"role,omitempty" json:"role,omitempty"`
+	Type string `xml:"type,omitempty" json:"type,omitempty"`
+}
+
+// nfoSet is the <set> (collection) element. It's a pointer field on nfoData so
+// XML marshaling can omit it entirely when absent — encoding/xml's omitempty
+// suppresses nil pointers but not empty structs.
+type nfoSet struct {
+	Name string `xml:"name,omitempty" json:"name,omitempty"`
 }
 
 // nfoData is a superset of the Kodi/Jellyfin <movie>, <tvshow>, and
 // <episodedetails> schemas. No XMLName is declared, so a single struct
 // unmarshals any of the three root elements; fields absent from a given file
-// simply stay zero-valued.
+// simply stay zero-valued. The xml tags carry omitempty so the same struct can
+// be marshaled back out (see nfo_write.go) without emitting empty tags; that
+// option is ignored when unmarshaling, so the read path is unaffected.
 type nfoData struct {
-	Title         string     `xml:"title" json:"title,omitempty"`
-	OriginalTitle string     `xml:"originaltitle" json:"original_title,omitempty"`
-	ShowTitle     string     `xml:"showtitle" json:"show_title,omitempty"`
-	Year          int        `xml:"year" json:"year,omitempty"`
-	Plot          string     `xml:"plot" json:"plot,omitempty"`
-	Tagline       string     `xml:"tagline" json:"tagline,omitempty"`
-	Rating        float64    `xml:"rating" json:"rating,omitempty"`
-	MPAA          string     `xml:"mpaa" json:"mpaa,omitempty"`
-	Runtime       int        `xml:"runtime" json:"runtime,omitempty"`
-	Premiered     string     `xml:"premiered" json:"premiered,omitempty"`
-	Aired         string     `xml:"aired" json:"aired,omitempty"`
-	EndDate       string     `xml:"enddate" json:"end_date,omitempty"`
-	Status        string     `xml:"status" json:"status,omitempty"`
-	Genres        []string   `xml:"genre" json:"genres,omitempty"`
-	Studios       []string   `xml:"studio" json:"studios,omitempty"`
-	Directors     []string   `xml:"director" json:"directors,omitempty"`
-	Actors        []nfoActor `xml:"actor" json:"actors,omitempty"`
+	Title         string     `xml:"title,omitempty" json:"title,omitempty"`
+	OriginalTitle string     `xml:"originaltitle,omitempty" json:"original_title,omitempty"`
+	ShowTitle     string     `xml:"showtitle,omitempty" json:"show_title,omitempty"`
+	Year          int        `xml:"year,omitempty" json:"year,omitempty"`
+	Plot          string     `xml:"plot,omitempty" json:"plot,omitempty"`
+	Tagline       string     `xml:"tagline,omitempty" json:"tagline,omitempty"`
+	Rating        float64    `xml:"rating,omitempty" json:"rating,omitempty"`
+	MPAA          string     `xml:"mpaa,omitempty" json:"mpaa,omitempty"`
+	Runtime       int        `xml:"runtime,omitempty" json:"runtime,omitempty"`
+	Premiered     string     `xml:"premiered,omitempty" json:"premiered,omitempty"`
+	Aired         string     `xml:"aired,omitempty" json:"aired,omitempty"`
+	EndDate       string     `xml:"enddate,omitempty" json:"end_date,omitempty"`
+	Status        string     `xml:"status,omitempty" json:"status,omitempty"`
+	Genres        []string   `xml:"genre,omitempty" json:"genres,omitempty"`
+	Studios       []string   `xml:"studio,omitempty" json:"studios,omitempty"`
+	Directors     []string   `xml:"director,omitempty" json:"directors,omitempty"`
+	Actors        []nfoActor `xml:"actor,omitempty" json:"actors,omitempty"`
 
 	// IMDB id appears under different tags across the three schemas:
 	// <imdbid> on movies/episodes, <imdb_id> on shows, and <id> holds a
 	// "tt…" value on movies but a numeric TVDB id on shows — so <id> is only
-	// trusted when it carries the "tt" prefix (see imdbID).
-	IMDBID    string `xml:"imdbid" json:"-"`
-	IMDBIDAlt string `xml:"imdb_id" json:"-"`
-	GenericID string `xml:"id" json:"-"`
+	// trusted when it carries the "tt" prefix (see imdbID). When writing we
+	// populate only IMDBID.
+	IMDBID    string `xml:"imdbid,omitempty" json:"-"`
+	IMDBIDAlt string `xml:"imdb_id,omitempty" json:"-"`
+	GenericID string `xml:"id,omitempty" json:"-"`
 
-	Collection struct {
-		Name string `xml:"name" json:"name,omitempty"`
-	} `xml:"set" json:"collection,omitempty"`
+	Collection *nfoSet `xml:"set,omitempty" json:"collection,omitempty"`
 
 	// Root is the XML root element name (movie | tvshow | episodedetails),
 	// filled in after decoding so callers can tell the schemas apart.

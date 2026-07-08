@@ -107,6 +107,7 @@ function restoreFilterState() {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-scan')?.addEventListener('click', () => typeof window.app.triggerScan === 'function' && window.app.triggerScan());
   document.getElementById('btn-auto-imdb')?.addEventListener('click', () => window.app.autoIMDB());
+  document.getElementById('backfill-nfo-btn')?.addEventListener('click', () => window.app.backfillAllNfo());
   document.getElementById('btn-settings-gear')?.addEventListener('click', () => window.app.showTab('settings'));
   document.getElementById('tab-library')?.addEventListener('click', () => window.app.showTab('library'));
   document.getElementById('tab-settings')?.addEventListener('click', () => window.app.showTab('settings'));

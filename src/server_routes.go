@@ -53,6 +53,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/subtitle/{id}", s.handleDeleteSubtitle)
 	mux.HandleFunc("POST /api/search/file/{id}", s.handleSearchFile)
 	mux.HandleFunc("POST /api/download/file/{id}", s.handleDownloadCandidate)
+	mux.HandleFunc("POST /api/nfo/media/{id}", s.handleBackfillNFO)
+	mux.HandleFunc("POST /api/nfo/backfill", s.handleBackfillAllNFO)
 	mux.HandleFunc("GET /api/imdb/search", s.handleIMDBSearch)
 	mux.HandleFunc("POST /api/imdb/auto", s.handleAutoIMDB)
 	mux.HandleFunc("GET /api/imdb/auto/status", s.handleAutoIMDBStatus)

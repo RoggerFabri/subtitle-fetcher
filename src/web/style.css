@@ -502,6 +502,8 @@ main { padding: 24px; }
 .media-year { color: var(--muted); font-weight: 400; margin-left: 6px; font-size: 12px; }
 .nfo-btn { font-size: 11px; padding: 2px 8px; flex-shrink: 0; color: var(--muted); }
 .nfo-btn:hover { color: var(--text); border-color: #3d4056; }
+.nfo-btn.nfo-get { color: #7c93ff; border-style: dashed; }
+.nfo-btn.nfo-get:hover { color: #a5b4ff; border-color: #7c93ff; }
 
 .air-badge {
   font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;

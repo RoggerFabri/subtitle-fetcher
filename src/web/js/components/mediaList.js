@@ -137,7 +137,7 @@ export function renderList() {
     const hasNfo = m.has_nfo || m.HasNFO;
     const nfoBtn = hasNfo
       ? `<button class="nfo-btn" onclick="window.app.openNfo(${id}, event)">NFO</button>`
-      : '';
+      : `<button class="nfo-btn nfo-get" id="nfo-get-${id}" onclick="window.app.backfillNfo(${id}, event)" title="Fetch metadata from TMDB">+ NFO</button>`;
 
     let chooseBtn = '';
     let fetchBtn = `<button class="fetch-btn" id="fetch-media-${id}" onclick="window.app.fetchMedia(${id}, event)">${label}</button>`;

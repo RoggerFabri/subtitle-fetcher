@@ -58,6 +58,24 @@ export async function apiFetchFile(id) {
   return res.json();
 }
 
+export async function apiBackfillNfo(id) {
+  const res = await fetch(`/api/nfo/media/${id}`, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "NFO backfill failed");
+  }
+  return res.json();
+}
+
+export async function apiBackfillAllNfo() {
+  const res = await fetch('/api/nfo/backfill', { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "NFO backfill failed");
+  }
+  return res.json();
+}
+
 export async function apiDeleteSubtitle(id) {
   const res = await fetch(`/api/subtitle/${id}`, { method: 'DELETE' });
   const data = await res.json();

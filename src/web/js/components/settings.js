@@ -17,6 +17,10 @@ export function loadSettings(s) {
     state.autoScanInterval = s.auto_scan_interval;
   }
 
+  if (typeof s.tmdb_api_key === 'string') {
+    state.tmdbApiKey = s.tmdb_api_key;
+  }
+
   for (const name of state.providerOrder) {
     if (s[name]) {
       if (s[name].enabled !== undefined) {
@@ -68,6 +72,12 @@ export function renderSettings() {
         <select onchange="window.app.state.autoScanInterval = this.value; window.app.saveAllProviders();">
           ${pollSelectOptions}
         </select>
+      </div>
+      <div class="provider-field-row">
+        <label title="Used to backfill NFO metadata (and poster/fanart) for items missing it. Get a free v3 API key at themoviedb.org.">TMDB API key</label>
+        <input type="text" value="${state.tmdbApiKey || ''}" placeholder="TMDB v3 API key"
+          oninput="window.app.state.tmdbApiKey = this.value; window.app.markDirty();"
+          onchange="window.app.saveAllProviders();">
       </div>
     </div>
   `;
@@ -160,7 +170,7 @@ export function moveProvider(name, dir) {
 }
 
 export async function saveAllProviders() {
-  const payload = { provider_order: state.providerOrder, workers: state.workers, auto_scan_interval: state.autoScanInterval };
+  const payload = { provider_order: state.providerOrder, workers: state.workers, auto_scan_interval: state.autoScanInterval, tmdb_api_key: state.tmdbApiKey };
   state.providerOrder.forEach(name => {
     payload[name] = { 
       ...state.providerFields[name], 
