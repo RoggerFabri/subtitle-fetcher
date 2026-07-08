@@ -5,17 +5,20 @@ GOARCH ?= $(shell go env GOARCH)
 ROOT ?= Z:\Shared\Downloads
 PORT ?= 9191
 
+# Only the binary's file extension is platform-specific.
 ifeq ($(GOOS),windows)
-  OUT  := $(BINARY).exe
-  RUN  := $(BINARY).exe
-  RM   := del /f /q
-  NULL := nul
+  OUT := $(BINARY).exe
 else
-  OUT  := $(BINARY)
-  RUN  := ./$(BINARY)
-  RM   := rm -f
-  NULL := /dev/null
+  OUT := $(BINARY)
 endif
+RUN := ./$(OUT)
+
+# Recipes run under a POSIX shell (Git Bash's sh on Windows), so use POSIX
+# commands and /dev/null on every platform. The old cmd-isms (`del`, `nul`)
+# silently failed under sh — that is what left a stray `nul` file behind and
+# turned `make clean` into a no-op, so old binaries kept piling up.
+RM   := rm -f
+NULL := /dev/null
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>$(NULL) || echo dev)
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
@@ -59,10 +62,10 @@ test-all:
 retest:
 	go test -count=1 ./...
 
-## clean   Remove compiled binaries (both platform names)
+## clean   Remove compiled binaries (both platform names) and stray build artifacts
 clean:
 	go clean
-	-$(RM) $(BINARY) $(BINARY).exe
+	-$(RM) $(BINARY) $(BINARY).exe $(BINARY).exe~ src.exe nul
 
 ## docker-build  Build the docker image
 docker-build:
