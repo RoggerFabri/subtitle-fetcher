@@ -73,9 +73,9 @@ docker-compose.yaml
 
 Stored in `data/` next to the binary by default. Override with `DB_PATH` env var (used by Docker to point at the mounted volume).
 
-- `media(id, path, name, type, imdb_id, last_scanned, scan_sig, nfo_path, year, air_status)` — one row per movie/series folder. `nfo_path`/`year`/`air_status` are populated from the folder's `.nfo` during scan (`air_status` = series Continuing/Ended)
-- `files(id, media_id, path, season, episode, has_subtitle, subtitle_name, last_seen)` — one row per video file
-- `settings(key, value)` — provider credentials, order, toggles
+- `media(id, path, name, type, imdb_id, last_scanned, scan_sig, nfo_path, year, air_status, added_at)` — one row per movie/series folder. `nfo_path`/`year`/`air_status` are populated from the folder's `.nfo` during scan (`air_status` = series Continuing/Ended). `added_at` is set once, on first insert, and never updated — the basis for "new since last seen".
+- `files(id, media_id, path, season, episode, has_subtitle, subtitle_name, last_seen, added_at)` — one row per video file. `added_at` (insert-only) marks when an episode first appeared, driving the per-show "+N new" episode badge.
+- `settings(key, value)` — provider credentials, order, toggles, and `library_seen_at` (the "seen everything up to here" timestamp for new-item detection).
 
 ### Incremental scanning
 
@@ -111,11 +111,16 @@ Download tokens use the format `"provider:handle"` (e.g. `"subdl:/subtitle/abc.z
 
 During a scan, if the media folder has an `.nfo`, its IMDB id (from `<imdbid>` / `<imdb_id>`, or `<id>` only when `tt`-prefixed) seeds `media.imdb_id` when empty — offline and exact, so no API guess is needed. When there's no NFO, `discoverIMDBID` (IMDB suggestion API) is the fallback and is called at most once per media entry; the result is stored in `media.imdb_id` and reused on all subsequent fetches. Users can override it via the IMDB picker (`PUT /api/media/{id}/imdb`). The column is never overwritten during a rescan.
 
+### New-since-last-seen detection
+
+Both `upsertMedia` and `upsertFile` write `added_at` only on the initial INSERT (never in the `ON CONFLICT` update), so it records when an entry first appeared — via either the scanner or the fsnotify watcher, since both funnel through those helpers. A `library_seen_at` timestamp in `settings` is the "seen up to here" pointer, seeded to now on first migration (so a pre-existing library — whose rows have an empty `added_at` after the `ALTER TABLE` — is never flagged; only genuinely new additions afterward are). `/api/report` computes `is_new` (media added after the pointer) and `new_episodes` (count of files added after it) with a lexical `added_at > library_seen_at` compare (safe because timestamps are fixed-format RFC3339 Zulu). The frontend renders a NEW badge / "+N new" sub-badge, a header "N new" count, a Recently Added strip, and a "New first" sort option; **Mark all seen** (`POST /api/seen`) advances the pointer to now, clearing the NEW markers. On a brand-new (empty) DB the first scan flags the whole library once — a one-time baseline the user clears with Mark all seen.
+
 ### Key API routes
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/api/report` | Full media + file list with subtitle status (incl. `year`, `air_status`, `has_nfo`) |
+| `GET` | `/api/report` | Full media + file list with subtitle status (incl. `year`, `air_status`, `has_nfo`, `is_new`, `new_episodes`) |
+| `POST` | `/api/seen` | Advance `library_seen_at` to now — clears all NEW markers ("Mark all seen") |
 | `GET` | `/api/media/{id}/nfo` | Parsed NFO metadata + raw XML for the viewer modal |
 | `POST` | `/api/scan` | Trigger FS scan |
 | `GET` | `/api/scan/status` | Scan progress |

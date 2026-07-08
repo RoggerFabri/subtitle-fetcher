@@ -50,6 +50,17 @@ function applyMediaData(data) {
   });
 }
 
+export async function markAllSeen() {
+  try {
+    await api.apiMarkSeen();
+    await refreshMediaAndStats();
+    showToast("Marked everything as seen", "success");
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || "Failed to mark seen", "error");
+  }
+}
+
 export async function refreshMediaAndStats() {
   try {
     applyMediaData(await api.apiGetReport());

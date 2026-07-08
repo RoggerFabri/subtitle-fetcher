@@ -33,6 +33,7 @@ func (s *server) routes() http.Handler {
 	}))
 
 	mux.HandleFunc("GET /api/report", s.handleReport)
+	mux.HandleFunc("POST /api/seen", s.handleMarkSeen)
 	mux.HandleFunc("GET /api/media/{id}/files", s.handleMediaFiles)
 	mux.HandleFunc("GET /api/media/{id}/nfo", s.handleMediaNFO)
 	mux.HandleFunc("GET /api/media/{id}/art", s.handleMediaArt)

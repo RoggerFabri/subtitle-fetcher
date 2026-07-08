@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS media (
     name         TEXT    NOT NULL,
     type         TEXT    NOT NULL CHECK(type IN ('movie','series')),
     imdb_id      TEXT    NOT NULL DEFAULT '',
-    last_scanned TEXT    NOT NULL
+    last_scanned TEXT    NOT NULL,
+    added_at     TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS files (
@@ -33,7 +34,8 @@ CREATE TABLE IF NOT EXISTS files (
     episode       INTEGER,
     has_subtitle  INTEGER NOT NULL DEFAULT 0,
     subtitle_name TEXT    NOT NULL DEFAULT '',
-    last_seen     TEXT    NOT NULL
+    last_seen     TEXT    NOT NULL,
+    added_at      TEXT    NOT NULL DEFAULT ''
 );
 `
 
@@ -79,6 +81,16 @@ func openDB(_ string) (*sql.DB, error) {
 	db.Exec(`ALTER TABLE media ADD COLUMN nfo_path TEXT NOT NULL DEFAULT ''`)
 	db.Exec(`ALTER TABLE media ADD COLUMN year INTEGER NOT NULL DEFAULT 0`)
 	db.Exec(`ALTER TABLE media ADD COLUMN air_status TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE media ADD COLUMN added_at TEXT NOT NULL DEFAULT ''`)
+	db.Exec(`ALTER TABLE files ADD COLUMN added_at TEXT NOT NULL DEFAULT ''`)
+
+	// Seed the "seen everything up to here" pointer once. On an existing DB this
+	// runs after the ALTERs above, so all pre-existing rows have added_at='' and
+	// are never treated as new — only genuinely new additions after this point
+	// (which get a non-empty added_at) show up as new.
+	if getSetting(db, "library_seen_at") == "" {
+		setSetting(db, "library_seen_at", time.Now().UTC().Format(time.RFC3339))
+	}
 	return db, nil
 }
 
@@ -103,13 +115,15 @@ func setSetting(db *sql.DB, key, value string) error {
 func upsertMedia(db dbExecer, path, name, typ string) (int64, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := db.Exec(`
-		INSERT INTO media(path, name, type, last_scanned)
-		VALUES(?, ?, ?, ?)
+		INSERT INTO media(path, name, type, last_scanned, added_at)
+		VALUES(?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
 			name         = excluded.name,
 			last_scanned = excluded.last_scanned`,
 		// imdb_id is intentionally excluded — preserve user-set or auto-discovered value.
-		path, name, typ, now)
+		// added_at is set only on first insert (not in the update set) so it marks
+		// when the entry first appeared.
+		path, name, typ, now, now)
 	if err != nil {
 		return 0, err
 	}
@@ -185,14 +199,16 @@ func upsertFile(db dbExecer, mediaID int64, path string, season, episode *int, h
 		sub = 1
 	}
 	_, err := db.Exec(`
-		INSERT INTO files(media_id, path, season, episode, has_subtitle, subtitle_name, last_seen)
-		VALUES(?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO files(media_id, path, season, episode, has_subtitle, subtitle_name, last_seen, added_at)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(path) DO UPDATE SET
 			season        = excluded.season,
 			episode       = excluded.episode,
 			has_subtitle  = excluded.has_subtitle,
 			subtitle_name = excluded.subtitle_name,
 			last_seen     = excluded.last_seen`,
-		mediaID, path, season, episode, sub, subtitleName, now)
+		// added_at is set only on first insert so it marks when the file (episode)
+		// first appeared — the basis for the "new episodes" badge.
+		mediaID, path, season, episode, sub, subtitleName, now, now)
 	return err
 }

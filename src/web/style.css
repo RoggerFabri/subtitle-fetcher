@@ -513,6 +513,66 @@ main { padding: 24px; }
 .air-continuing { background: #0d2a1a; color: #4ade80; border-color: #1c5238; }
 .air-ended { background: #2a1a1a; color: #f87171; border-color: #532020; }
 
+/* --- New-since-last-seen indicators --- */
+.new-badge {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0;
+  background: var(--green); color: #06240f; border: 1px solid var(--green);
+}
+/* "+N new" episodes on an existing show — softer, outlined variant. */
+.new-badge--eps {
+  background: #0d2a1a; color: #4ade80; border-color: #1c5238; text-transform: none; letter-spacing: 0;
+}
+.mark-seen-btn {
+  font-size: 11px; padding: 4px 10px; margin-left: 6px;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+}
+.mark-seen-btn:hover { color: var(--text); border-color: var(--green); }
+
+/* Header "N new" badge — quick jump to the New filter. */
+.header-new-badge {
+  font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 6px;
+  background: #0d2a1a; color: #4ade80; border: 1px solid #1c5238; cursor: pointer;
+}
+.header-new-badge:hover { border-color: var(--green); color: #86efac; }
+.header-new-badge #header-new-count { font-weight: 700; }
+
+/* Recently Added strip */
+.recently-added {
+  margin: 0 0 14px; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+}
+.recently-added-head { display: flex; align-items: center; }
+.recently-added-toggle {
+  display: flex; align-items: center; gap: 8px;
+  background: none; border: none; padding: 0; cursor: pointer; color: var(--text);
+}
+.recently-added-toggle .chevron { color: var(--muted); font-size: 12px; width: 12px; }
+.recently-added-title { font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+.recently-added-count {
+  min-width: 18px; padding: 0 6px; font-size: 11px; font-weight: 700; line-height: 18px;
+  text-align: center; border-radius: 9px; background: var(--green); color: #06240f;
+}
+.recently-added-body {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+}
+.recently-added-body.collapsed { display: none; }
+.ra-chip {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 260px;
+  padding: 5px 10px; font-size: 12px; cursor: pointer;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 999px;
+}
+.ra-chip:hover { border-color: var(--green); }
+.ra-badge { font-size: 9px; padding: 1px 6px; }
+.ra-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ra-tag {
+  font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0;
+  background: var(--green); color: #06240f;
+}
+.ra-tag--eps { background: #0d2a1a; color: #4ade80; border: 1px solid #1c5238; text-transform: none; letter-spacing: 0; }
+
 /* --- NFO: viewer modal --- */
 .modal-header-actions { display: flex; align-items: center; gap: 8px; }
 .nfo-raw-toggle { font-size: 11px; padding: 3px 10px; color: var(--muted); }

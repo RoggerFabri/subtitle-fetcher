@@ -108,6 +108,23 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-scan')?.addEventListener('click', () => typeof window.app.triggerScan === 'function' && window.app.triggerScan());
   document.getElementById('btn-auto-imdb')?.addEventListener('click', () => window.app.autoIMDB());
   document.getElementById('backfill-nfo-btn')?.addEventListener('click', () => window.app.backfillAllNfo());
+  document.getElementById('btn-mark-seen')?.addEventListener('click', () => window.app.markAllSeen());
+  document.getElementById('header-new-badge')?.addEventListener('click', () => window.app.showNewOnly());
+
+  // Recently Added collapse toggle (state persisted so it stays how the user left it).
+  const raToggle = document.getElementById('recently-added-toggle');
+  const raBody = document.getElementById('recently-added-body');
+  const raChevron = document.getElementById('recently-added-chevron');
+  const applyRaCollapsed = (collapsed) => {
+    raBody?.classList.toggle('collapsed', collapsed);
+    if (raChevron) raChevron.textContent = collapsed ? '▸' : '▾';
+  };
+  applyRaCollapsed(localStorage.getItem('sf-recent-collapsed') === '1');
+  raToggle?.addEventListener('click', () => {
+    const collapsed = !raBody?.classList.contains('collapsed');
+    applyRaCollapsed(collapsed);
+    localStorage.setItem('sf-recent-collapsed', collapsed ? '1' : '0');
+  });
   document.getElementById('btn-settings-gear')?.addEventListener('click', () => window.app.showTab('settings'));
   document.getElementById('tab-library')?.addEventListener('click', () => window.app.showTab('library'));
   document.getElementById('tab-settings')?.addEventListener('click', () => window.app.showTab('settings'));

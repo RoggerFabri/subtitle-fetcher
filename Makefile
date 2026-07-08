@@ -3,7 +3,7 @@ GOOS   ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
 ROOT ?= Z:\Shared\Downloads
-PORT ?= 8080
+PORT ?= 9191
 
 ifeq ($(GOOS),windows)
   OUT  := $(BINARY).exe

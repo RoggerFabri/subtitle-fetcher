@@ -10,6 +10,12 @@ export async function apiGetReport() {
   return res.json();
 }
 
+export async function apiMarkSeen() {
+  const res = await fetch('/api/seen', { method: 'POST' });
+  if (!res.ok) throw new Error("Failed to mark library seen");
+  return res.json();
+}
+
 export async function apiGetMediaFiles(id) {
   const res = await fetch(`/api/media/${id}/files`);
   if (!res.ok) throw new Error("Failed to load files");

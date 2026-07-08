@@ -67,6 +67,9 @@ export function renderList() {
   const nfoFilter = document.querySelector('.pills[data-filter="nfo"] .pill.active')?.dataset.value || "";
   const sortBy = document.querySelector('.pills[data-filter="sort"] .pill.active')?.dataset.value || "";
 
+  updateNewIndicators();
+  renderRecentlyAdded();
+
   const filtered = (state.mediaData || []).filter(m => {
     if (m.total_count === 0) return false;
     const name = m.name || m.Name || "";
@@ -88,7 +91,16 @@ export function renderList() {
     return matchesSearch && matchesType && matchesStatus && matchesImdb && matchesNfo;
   });
 
-  if (sortBy === 'name') {
+  if (sortBy === 'new') {
+    // New items first (brand-new or gained episodes), most-recently-added among
+    // them at the top; everything else falls back to alphabetical.
+    filtered.sort((a, b) => {
+      const na = hasNewContent(a), nb = hasNewContent(b);
+      if (na !== nb) return na ? -1 : 1;
+      if (na && nb) return (b.last_added || b.LastAdded || '').localeCompare(a.last_added || a.LastAdded || '');
+      return (a.name || a.Name || '').localeCompare(b.name || b.Name || '');
+    });
+  } else if (sortBy === 'name') {
     filtered.sort((a, b) => (a.name || a.Name || '').localeCompare(b.name || b.Name || ''));
   } else if (sortBy === 'coverage') {
     filtered.sort((a, b) => {
@@ -139,6 +151,14 @@ export function renderList() {
     const airBadge = air
       ? `<span class="air-badge air-${air.toLowerCase().replace(/[^a-z]+/g, '-')}">${air}</span>`
       : '';
+    const newEpisodes = m.new_episodes || m.NewEpisodes || 0;
+    // Brand-new movie/series → NEW; an existing show that only gained episodes → +N new.
+    const newBadge = isMediaNew(m)
+      ? `<span class="new-badge" title="Added since you last marked the library seen">NEW</span>`
+      : (newEpisodes > 0
+          ? `<span class="new-badge new-badge--eps" title="${newEpisodes} new episode${newEpisodes > 1 ? 's' : ''} since you last marked the library seen">+${newEpisodes} new</span>`
+          : '');
+
     const hasNfo = m.has_nfo || m.HasNFO;
     const nfoBtn = hasNfo
       ? `<button class="nfo-btn" onclick="window.app.openNfo(${id}, event)">NFO</button>`
@@ -160,10 +180,11 @@ export function renderList() {
     }
 
     return `
-    <div class="media-card ${isExpanded ? 'expanded' : ''}">
+    <div class="media-card ${isExpanded ? 'expanded' : ''}" data-id="${id}">
       <div class="media-header" onclick="window.app.toggleExpand(${id})">
         <span class="badge badge-${type}">${type}</span>
         <span class="media-name">${m.name || m.Name}${yearTag}</span>
+        ${newBadge}
         ${airBadge}
         <span class="coverage">${m.subtitles_count}/${m.total_count}</span>
         <div class="dot dot-${getStatusColor(m.status)}"></div>
@@ -278,6 +299,99 @@ export function renderEpisodes(mediaId, season) {
       }).join('')}
     </div>
   `;
+}
+
+// A media entry is "new" when its folder was added since the last time the
+// library was marked seen (server sets is_new by comparing added_at with
+// library_seen_at).
+export function isMediaNew(m) {
+  return !!(m.is_new || m.IsNew);
+}
+
+// True for a brand-new entry OR an existing show that gained episodes — the set
+// counted by the header badge and floated to the top by the "New first" sort.
+export function hasNewContent(m) {
+  return isMediaNew(m) || (m.new_episodes || m.NewEpisodes || 0) > 0;
+}
+
+// Refreshes the header "N new" badge and the "Mark all seen" button visibility.
+function updateNewIndicators() {
+  const newItems = (state.mediaData || []).filter(m => m.total_count > 0 && hasNewContent(m)).length;
+
+  const markBtn = document.getElementById('btn-mark-seen');
+  if (markBtn) markBtn.classList.toggle('hidden', newItems === 0);
+
+  const headerBadge = document.getElementById('header-new-badge');
+  const headerCount = document.getElementById('header-new-count');
+  if (headerCount) headerCount.textContent = String(newItems);
+  if (headerBadge) headerBadge.classList.toggle('hidden', newItems === 0);
+}
+
+const RECENT_LIMIT = 12;
+
+// Recently Added strip: media with a non-empty added_at (i.e. added since this
+// feature/upgrade), newest first. Unlike the NEW badges, this does NOT clear on
+// "Mark all seen" — it's a browse-what-arrived list, ordered by last_added
+// (latest of the folder's or any episode's add time).
+export function renderRecentlyAdded() {
+  const section = document.getElementById('recently-added');
+  const body = document.getElementById('recently-added-body');
+  const countEl = document.getElementById('recently-added-count');
+  if (!section || !body) return;
+
+  const recent = (state.mediaData || [])
+    .filter(m => m.total_count > 0 && (m.last_added || m.LastAdded))
+    .sort((a, b) => (b.last_added || b.LastAdded || '').localeCompare(a.last_added || a.LastAdded || ''))
+    .slice(0, RECENT_LIMIT);
+
+  if (recent.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  if (countEl) countEl.textContent = String(recent.length);
+
+  body.innerHTML = recent.map(m => {
+    const id = m.id || m.Id;
+    const type = m.type || m.Type;
+    const name = m.name || m.Name || '';
+    const newEps = m.new_episodes || m.NewEpisodes || 0;
+    const tag = isMediaNew(m)
+      ? '<span class="ra-tag">NEW</span>'
+      : (newEps > 0 ? `<span class="ra-tag ra-tag--eps">+${newEps}</span>` : '');
+    return `
+      <button class="ra-chip" onclick="window.app.focusRecentMedia(${id})" title="${name.replace(/"/g, '&quot;')}">
+        <span class="badge badge-${type} ra-badge">${type}</span>
+        <span class="ra-name">${name}</span>
+        ${tag}
+      </button>`;
+  }).join('');
+}
+
+// Jump to a media card from the Recently Added strip. Clears filters/search so
+// the target is guaranteed visible, scrolls to it, then expands it.
+export function focusRecentMedia(id) {
+  const search = document.getElementById('search');
+  if (search) { search.value = ''; document.getElementById('search-clear')?.classList.add('hidden'); }
+  document.querySelectorAll('.pills[data-filter]').forEach(group => {
+    group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    group.querySelector('.pill[data-value=""]')?.classList.add('active');
+  });
+  renderList();
+  const card = document.querySelector(`#media-list .media-card[data-id="${id}"]`);
+  card?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (!state.expandedIds.has(id)) toggleExpand(id);
+}
+
+// Activate the "New first" sort (used by the header badge).
+export function showNewOnly() {
+  const group = document.querySelector('.pills[data-filter="sort"]');
+  if (group) {
+    group.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+    group.querySelector('.pill[data-value="new"]')?.classList.add('active');
+  }
+  renderList();
+  document.getElementById('media-list')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 export function updateStats(stats) {
