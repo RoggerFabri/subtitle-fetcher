@@ -69,7 +69,7 @@ clean:
 
 ## docker-build  Build the docker image
 docker-build:
-	docker build -t $(BINARY):latest .
+	docker build --pull -t $(BINARY):latest .
 
 ## docker-run    Build then run the docker image (with default binds)
 docker-run: docker-build

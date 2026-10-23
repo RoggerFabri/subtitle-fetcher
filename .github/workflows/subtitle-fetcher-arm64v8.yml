@@ -80,6 +80,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           push: true
+          pull: true
           context: .
           file: ./Dockerfile.prebuilt
           platforms: linux/arm64
